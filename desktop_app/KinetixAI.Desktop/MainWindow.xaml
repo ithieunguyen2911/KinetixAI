@@ -117,20 +117,32 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="6"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="TxtSourceUrl" Text="demo://sample" Style="{StaticResource StudioTextBox}"/>
-                            <Button x:Name="BtnBrowseFile" Grid.Column="2" Content="Browse" Click="BtnBrowseFile_Click"
-                                    Style="{StaticResource StudioSecondaryButton}"/>
+                            <Button x:Name="BtnInspectSource" Grid.Column="2" Content="Inspect" Click="BtnInspectSource_Click"
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="10,7"/>
+                            <Button x:Name="BtnBrowseFile" Grid.Column="4" Content="Browse" Click="BtnBrowseFile_Click"
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="10,7"/>
                         </Grid>
 
                         <TextBlock Text="Composition Template ID" Foreground="#9CA3AF" FontSize="11.5" Margin="0,0,0,4"/>
                         <TextBox x:Name="TxtTemplateId" Text="CaptionTemplate" Style="{StaticResource StudioTextBox}" Margin="0,0,0,10"/>
 
-                        <TextBlock Text="Script / Caption Segments (pipe '|' or newline separated)" Foreground="#9CA3AF" FontSize="11.5" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Script / Captions (blank = Auto-Whisper STT)" Foreground="#9CA3AF" FontSize="11.5" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnClearScript" Grid.Column="1" Content="Auto-Whisper (Clear)" Click="BtnClearScript_Click"
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="8,2" FontSize="10.5"/>
+                        </Grid>
                         <TextBox x:Name="TxtScriptText"
                                  Text="Kinetix Studio Automated Video Pipeline|Powered by Remotion, HyperFrames &amp; FFmpeg|Spec-Driven Development with GitHub Spec Kit"
                                  Style="{StaticResource StudioTextBox}"
-                                 AcceptsReturn="True" TextWrapping="Wrap" Height="68" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12"/>
+                                 AcceptsReturn="True" TextWrapping="Wrap" Height="64" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12"/>
 
                         <Button x:Name="BtnRunPipeline" Content="Execute 5-Step Production Pipeline" Click="BtnRunPipeline_Click"
                                 Style="{StaticResource StudioPrimaryButton}" Margin="0,0,0,8"/>

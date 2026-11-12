@@ -31,9 +31,18 @@ class CreateProjectRequest(BaseModel):
     )
     template_id: str = Field(default="CaptionTemplate")
     script_text: str | None = Field(
-        default="KinetixAI Clean Architecture Video Studio|Powered by Remotion, HyperFrames, Whisper & FFmpeg|Spec-Driven Development with GitHub Spec Kit",
-        description="Optional script separated by | or newlines",
+        default=None,
+        description="Optional script separated by | or newlines (leave empty to auto-transcribe audio with Whisper)",
     )
+
+
+class InspectSourceRequest(BaseModel):
+    source_url: str = Field(min_length=1, description="Video URL, local file path, or demo://sample")
+
+
+class MixAudioRequest(BaseModel):
+    background_audio_path: str = Field(min_length=1, description="Path to background audio WAV/MP3 file")
+    bg_volume: float = Field(default=0.20, ge=0.0, le=1.0)
 
 
 class UpdateSubtitlesRequest(BaseModel):

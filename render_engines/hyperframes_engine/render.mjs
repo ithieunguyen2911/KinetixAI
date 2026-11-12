@@ -57,7 +57,8 @@ try {
 }
 
 const subtitles = Array.isArray(propsObj.subtitles) ? propsObj.subtitles : [];
-const maxEnd = subtitles.reduce((acc, s) => Math.max(acc, Number(s.end_time) || 0), 6.0);
+const baseDuration = Number(propsObj.duration_seconds) > 0 ? Number(propsObj.duration_seconds) : 6.0;
+const maxEnd = subtitles.reduce((acc, s) => Math.max(acc, Number(s.end_time) || 0), baseDuration);
 const duration = Math.max(2.0, Math.ceil(maxEnd));
 const outputPath = path.resolve(parsed.output);
 const workDir = path.dirname(outputPath);

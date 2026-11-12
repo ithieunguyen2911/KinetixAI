@@ -18,6 +18,12 @@ def test_fastapi_health_and_project_lifecycle(tmp_path: Path) -> None:
     assert "remotion" in health_data["supported_engines"]
     assert "hyperframes" in health_data["supported_engines"]
 
+    # 1b. Inspect source metadata endpoint
+    inspect_res = client.post("/api/v1/sources/inspect", json={"source_url": "demo://sample"})
+    assert inspect_res.status_code == 200
+    assert inspect_res.json()["source_type"] == "demo"
+    assert inspect_res.json()["resolution"] == "1280x720"
+
     # 2. Create and run project via POST /api/v1/projects
     create_res = client.post(
         "/api/v1/projects",

@@ -15,6 +15,8 @@ from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.presentation.schemas.project_schemas import (
     CreateProjectRequest,
     HealthResponse,
+    InspectSourceRequest,
+    MixAudioRequest,
     ProjectResponse,
     UpdateSubtitlesRequest,
 )
@@ -81,6 +83,13 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
         projects = service.list_projects()
         return [ProjectResponse(**p.to_dict()) for p in projects]
 
+    @app.post("/api/v1/sources/inspect")
+    def inspect_source(request: InspectSourceRequest) -> Dict[str, Any]:
+        try:
+            return service.inspect_source(request.source_url)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/v1/projects", response_model=ProjectResponse)
     def create_and_run_project(request: CreateProjectRequest) -> ProjectResponse:
         try:
@@ -132,6 +141,9 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 "kinetix_list_projects",
                 "kinetix_get_project",
                 "kinetix_update_subtitles",
+                "kinetix_probe_media",
+                "kinetix_trim_video",
+                "kinetix_inspect_source",
                 "kinetix_launch_desktop_app",
                 "kinetix_health_check",
             ],
@@ -160,6 +172,20 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 project_id=project_id,
                 start_time=request.start_time,
                 end_time=request.end_time,
+            )
+            return ProjectResponse(**project.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/mix-audio", response_model=ProjectResponse)
+    def mix_project_audio(project_id: str, request: MixAudioRequest) -> ProjectResponse:
+        try:
+            project = service.mix_project_audio(
+                project_id=project_id,
+                background_audio_path=Path(request.background_audio_path),
+                bg_volume=request.bg_volume,
             )
             return ProjectResponse(**project.to_dict())
         except KeyError as exc:

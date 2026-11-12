@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any, Dict, List
 
@@ -109,6 +110,26 @@ class FfmpegAdapter(IVideoProcessor):
             subprocess.run(fallback_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return output_audio
 
+    @staticmethod
+    def _safe_finalize_output(staging_path: Path, output_path: Path) -> Path:
+        """Move staging_path to output_path; if output_path is locked on Windows, roll over to an unlocked rev filename."""
+        try:
+            if output_path.exists():
+                output_path.unlink()
+            shutil.move(str(staging_path), str(output_path))
+            return output_path
+        except OSError:
+            for rev in range(1, 50):
+                alt_path = output_path.with_name(f"{output_path.stem}_rev{rev}{output_path.suffix}")
+                try:
+                    if alt_path.exists():
+                        alt_path.unlink()
+                    shutil.move(str(staging_path), str(alt_path))
+                    return alt_path
+                except OSError:
+                    continue
+            return staging_path
+
     def trim_video(
         self,
         video_path: Path,
@@ -122,6 +143,7 @@ class FfmpegAdapter(IVideoProcessor):
         if end_time <= start_time:
             raise ValueError("end_time must be greater than start_time.")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_trim_{output_path.name}")
 
         cmd = [
             "ffmpeg",
@@ -140,10 +162,10 @@ class FfmpegAdapter(IVideoProcessor):
             "ultrafast",
             "-c:a",
             "aac",
-            str(output_path),
+            str(staging_path),
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return output_path
+        return self._safe_finalize_output(staging_path, output_path)
 
     def mix_audio_tracks(
         self,
@@ -158,6 +180,7 @@ class FfmpegAdapter(IVideoProcessor):
         if not background_audio_path.exists():
             raise FileNotFoundError(f"Background audio not found: {background_audio_path}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_mix_{output_path.name}")
 
         filter_complex = (
             f"[1:a]volume={bg_volume:.2f}[bg];"
@@ -181,10 +204,10 @@ class FfmpegAdapter(IVideoProcessor):
             "-c:a",
             "aac",
             "-shortest",
-            str(output_path),
+            str(staging_path),
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return output_path
+        return self._safe_finalize_output(staging_path, output_path)
 
     def merge_and_export(
         self,
@@ -199,6 +222,7 @@ class FfmpegAdapter(IVideoProcessor):
         if not overlay_video.exists():
             raise FileNotFoundError(f"Overlay video not found: {overlay_video}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_merge_{output_path.name}")
 
         overlay_chain = "[1:v]colorkey=0x000000:0.06:0.05[ov];[0:v][ov]overlay=0:0:shortest=1[vout]"
 
@@ -224,15 +248,16 @@ class FfmpegAdapter(IVideoProcessor):
             "-c:a",
             "aac",
             "-shortest",
-            str(output_path),
+            str(staging_path),
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        final_file = self._safe_finalize_output(staging_path, output_path)
 
         if subtitles:
-            self._write_srt(subtitles, output_path.with_suffix(".srt"))
-            self._write_vtt(subtitles, output_path.with_suffix(".vtt"))
+            self._write_srt(subtitles, final_file.with_suffix(".srt"))
+            self._write_vtt(subtitles, final_file.with_suffix(".vtt"))
 
-        return output_path
+        return final_file
 
     @staticmethod
     def _write_srt(subtitles: List[SubtitleSegment], srt_path: Path) -> None:

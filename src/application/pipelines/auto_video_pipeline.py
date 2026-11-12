@@ -67,9 +67,14 @@ class AutoVideoPipeline:
                 f"Step 4/5: Rendering motion graphics overlay ({engine_label})",
             )
             overlay_target = work_dir / f"{project.project_id}_overlay.mp4"
+            probe_info = self.processor.probe_media(project.raw_video_path)
+            raw_duration = float(probe_info.get("duration_seconds") or 6.0)
+            for seg in project.subtitles:
+                seg.ensure_word_timestamps()
             props = {
                 "project_id": project.project_id,
                 "engine": project.engine_type.value,
+                "duration_seconds": raw_duration,
                 "subtitles": [s.to_dict() for s in project.subtitles],
             }
             project.overlay_video_path = self.renderer.render_composition(

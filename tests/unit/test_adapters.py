@@ -69,6 +69,17 @@ def test_ffmpeg_adapter_extract_audio_and_whisper_transcribe(tmp_path: Path) -> 
     transcript_json = out_audio.with_suffix(".transcript.json")
     assert transcript_json.exists()
 
+    # Verify automatic speech-to-text transcription when script_hint is None
+    auto_segments = transcriber.transcribe(out_audio, script_hint=None)
+    assert len(auto_segments) >= 1
+    assert all(len(seg.words) >= 1 for seg in auto_segments)
+
+    # Verify mix_audio_tracks
+    mixed_video = tmp_path / "mixed.mp4"
+    processor.mix_audio_tracks(raw_video, out_audio, mixed_video, bg_volume=0.15)
+    assert mixed_video.exists()
+    assert mixed_video.stat().st_size > 1000
+
 
 def test_remotion_and_hyperframes_adapters_render_overlays(tmp_path: Path) -> None:
     remotion = RemotionAdapter()

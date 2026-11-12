@@ -83,6 +83,33 @@ public class TrimVideoRequestDto
     public double EndTime { get; set; }
 }
 
+public class InspectSourceRequestDto
+{
+    [JsonPropertyName("source_url")]
+    public string SourceUrl { get; set; } = "demo://sample";
+}
+
+public class SourceMetadataDto
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("duration")]
+    public double Duration { get; set; }
+
+    [JsonPropertyName("resolution")]
+    public string Resolution { get; set; } = string.Empty;
+
+    [JsonPropertyName("fps")]
+    public double Fps { get; set; }
+
+    [JsonPropertyName("source_type")]
+    public string SourceType { get; set; } = string.Empty;
+}
+
 public class UpdateSubtitlesRequestDto
 {
     [JsonPropertyName("engine_type")]

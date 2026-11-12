@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from typing import Any, Dict, List
 
 try:
@@ -44,12 +45,13 @@ def kinetix_health_check() -> Dict[str, Any]:
     return {
         "status": "ok",
         "mcp_server": "kinetix-ai",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "supported_engines": [e.value for e in RenderEngineType],
         "desktop_app_built": desktop_exe.exists(),
         "desktop_app_path": str(desktop_exe),
         "tools": {
             "ffmpeg": shutil.which("ffmpeg") is not None,
+            "ffprobe": shutil.which("ffprobe") is not None,
             "node": shutil.which("node") is not None,
             "yt_dlp": True,
             "whisper": True,
@@ -60,11 +62,19 @@ def kinetix_health_check() -> Dict[str, Any]:
 
 
 @mcp.tool()
+def kinetix_inspect_source(source_url: str = "demo://sample", workspace_dir: str | None = None) -> Dict[str, Any]:
+    """Inspect remote video URL or local video file metadata via yt-dlp / ffprobe without downloading the full video."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.inspect_source(source_url)
+
+
+@mcp.tool()
 def kinetix_produce_video(
     project_id: str,
     source_url: str = "demo://sample",
     engine_type: str = "remotion",
-    script_text: str = "KinetixAI AI-Commanded Video|Rendered via Antigravity MCP|Powered by Remotion, HyperFrames & FFmpeg",
+    script_text: str | None = "KinetixAI AI-Commanded Video|Rendered via Antigravity MCP|Powered by Remotion, HyperFrames & FFmpeg",
     template_id: str = "CaptionTemplate",
     workspace_dir: str | None = None,
 ) -> Dict[str, Any]:
@@ -74,7 +84,7 @@ def kinetix_produce_video(
         project_id: Unique slug identifier for the video project (e.g. 'ai_video_01').
         source_url: Video URL, local video file path, or 'demo://sample'.
         engine_type: Visual render engine: 'remotion' (React) or 'hyperframes' (HTML/GSAP).
-        script_text: Pipe-separated ('|') or newline-separated subtitle lines for the video.
+        script_text: Optional pipe-separated ('|') or newline-separated subtitle lines (leave None/empty to auto-transcribe audio).
         template_id: Composition template name (default 'CaptionTemplate').
         workspace_dir: Optional custom workspace folder path.
     """
@@ -107,6 +117,28 @@ def kinetix_get_project(project_id: str, workspace_dir: str | None = None) -> Di
     if not project:
         raise ValueError(f"Project '{project_id}' not found.")
     return project.to_dict()
+
+
+@mcp.tool()
+def kinetix_probe_media(project_id: str, workspace_dir: str | None = None) -> Dict[str, Any]:
+    """Inspect technical video/audio stream specifications (codec, resolution, fps, duration, sample_rate) of a project via ffprobe."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.probe_project_media(project_id)
+
+
+@mcp.tool()
+def kinetix_trim_video(
+    project_id: str,
+    start_time: float,
+    end_time: float,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Trim a project's final MP4 video between start_time and end_time (seconds) using FFmpeg."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.trim_project_video(project_id=project_id, start_time=start_time, end_time=end_time)
+    return updated.to_dict()
 
 
 @mcp.tool()
@@ -143,26 +175,26 @@ def kinetix_update_subtitles(
                 )
                 for w in item.get("words", [])
             ]
-            domain_subs.append(
-                SubtitleSegment(
-                    start_time=float(item["start_time"]),
-                    end_time=float(item["end_time"]),
-                    text=str(item["text"]),
-                    words=words,
-                )
+            seg = SubtitleSegment(
+                start_time=float(item["start_time"]),
+                end_time=float(item["end_time"]),
+                text=str(item["text"]),
+                words=words,
             )
+            seg.ensure_word_timestamps()
+            domain_subs.append(seg)
     else:
         parts = [p.strip() for p in stripped.replace("\n", "|").split("|") if p.strip()]
         total_dur = max(6.0, existing.subtitles[-1].end_time if existing.subtitles else 6.0)
         seg_dur = total_dur / max(1, len(parts))
         for idx, text in enumerate(parts):
-            domain_subs.append(
-                SubtitleSegment(
-                    start_time=round(idx * seg_dur, 3),
-                    end_time=round((idx + 1) * seg_dur, 3),
-                    text=text,
-                )
+            seg = SubtitleSegment(
+                start_time=round(idx * seg_dur, 3),
+                end_time=round((idx + 1) * seg_dur, 3),
+                text=text,
             )
+            seg.ensure_word_timestamps()
+            domain_subs.append(seg)
 
     updated = service.update_subtitles_and_rerender(
         project_id=project_id,
@@ -199,7 +231,23 @@ def kinetix_launch_desktop_app() -> Dict[str, Any]:
 
 
 def main() -> None:
-    """Run the KinetixAI MCP server over standard input/output (stdio)."""
+    """Run the KinetixAI MCP server over stdio, or execute a diagnostic check when --self-test is passed."""
+    if "--self-test" in sys.argv:
+        health = kinetix_health_check()
+        source_meta = kinetix_inspect_source("demo://sample")
+        projects = kinetix_list_projects()
+        print(
+            json.dumps(
+                {
+                    "self_test": "passed",
+                    "health": health,
+                    "demo_source_metadata": source_meta,
+                    "workspace_project_count": len(projects),
+                },
+                indent=2,
+            )
+        )
+        return
     mcp.run(transport="stdio")
 
 

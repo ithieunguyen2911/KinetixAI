@@ -368,24 +368,79 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task ReleaseVideoPlayerLockAsync()
+    {
+        try
+        {
+            _playheadTimer.Stop();
+            _isPlaying = false;
+            BtnPlayPause.Content = "Play";
+            VideoPlayer.Stop();
+            VideoPlayer.Source = null;
+            VideoPlayer.Close();
+            await Task.Delay(120);
+        }
+        catch
+        {
+            // Ignore media release warnings
+        }
+    }
+
+    private async void BtnInspectSource_Click(object sender, RoutedEventArgs e)
+    {
+        BtnInspectSource.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            var url = TxtSourceUrl.Text.Trim();
+            if (string.IsNullOrWhiteSpace(url)) return;
+
+            AppendLog($"Inspecting source metadata via yt-dlp / ffprobe: {url}...");
+            var response = await _http.PostAsJsonAsync("/api/v1/sources/inspect", new InspectSourceRequestDto { SourceUrl = url });
+            response.EnsureSuccessStatusCode();
+            var meta = await response.Content.ReadFromJsonAsync<SourceMetadataDto>();
+            if (meta != null)
+            {
+                TxtSpecResolution.Text = $"RES: {meta.Resolution}";
+                TxtSpecFps.Text = $"FPS: {meta.Fps:0.00}";
+                TxtSpecDuration.Text = $"DUR: {meta.Duration:0.00}s";
+                AppendLog($"Source inspected: title='{meta.Title}', type={meta.SourceType}, res={meta.Resolution}, duration={meta.Duration:0.00}s");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Source inspect error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Inspect Source Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            BtnInspectSource.IsEnabled = true;
+        }
+    }
+
+    private void BtnClearScript_Click(object sender, RoutedEventArgs e)
+    {
+        TxtScriptText.Text = string.Empty;
+        AppendLog("Script cleared. Pipeline will use automatic speech-to-text transcription (Whisper / Windows Speech STT) on the extracted WAV audio.");
+    }
+
     private async void BtnRunPipeline_Click(object sender, RoutedEventArgs e)
     {
         BtnRunPipeline.IsEnabled = false;
         try
         {
             await EnsureBackendRunningAsync();
-            // Release file lock on video player before overwriting the same project's MP4
-            VideoPlayer.Stop();
-            VideoPlayer.Source = null;
+            await ReleaseVideoPlayerLockAsync();
 
             var engine = GetSelectedEngine();
+            var scriptVal = TxtScriptText.Text.Trim();
             var req = new CreateProjectRequestDto
             {
                 ProjectId = TxtProjectId.Text.Trim(),
                 SourceUrl = TxtSourceUrl.Text.Trim(),
                 EngineType = engine,
                 TemplateId = TxtTemplateId.Text.Trim(),
-                ScriptText = TxtScriptText.Text.Trim(),
+                ScriptText = string.IsNullOrWhiteSpace(scriptVal) ? null : scriptVal,
             };
 
             TxtStepStatus.Text = $"Running 5-Step Pipeline ({engine.ToUpperInvariant()})...";
@@ -428,11 +483,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Commit any active cell or row edit in the DataGrid before reading SubtitleItems
+        GridSubtitles.CommitEdit(DataGridEditingUnit.Cell, true);
+        GridSubtitles.CommitEdit(DataGridEditingUnit.Row, true);
+
         BtnRerenderSubtitles.IsEnabled = false;
         try
         {
-            VideoPlayer.Stop();
-            VideoPlayer.Source = null;
+            await ReleaseVideoPlayerLockAsync();
 
             var engine = GetSelectedEngine();
             var req = new UpdateSubtitlesRequestDto
@@ -465,8 +523,8 @@ public partial class MainWindow : Window
     private async void BtnTrimVideo_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject == null) return;
-        if (!double.TryParse(TxtTrimStart.Text, out double startSec) ||
-            !double.TryParse(TxtTrimEnd.Text, out double endSec) ||
+        if (!double.TryParse(TxtTrimStart.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double startSec) ||
+            !double.TryParse(TxtTrimEnd.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double endSec) ||
             endSec <= startSec)
         {
             MessageBox.Show("Enter valid Start and End seconds (End > Start).", "Invalid Trim Range", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -476,8 +534,7 @@ public partial class MainWindow : Window
         BtnTrimVideo.IsEnabled = false;
         try
         {
-            VideoPlayer.Stop();
-            VideoPlayer.Source = null;
+            await ReleaseVideoPlayerLockAsync();
 
             AppendLog($"Trimming '{_currentProject.ProjectId}' from {startSec:0.00}s to {endSec:0.00}s via FFmpeg...");
             var response = await _http.PostAsJsonAsync(

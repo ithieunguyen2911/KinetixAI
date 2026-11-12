@@ -7,8 +7,11 @@ from src.presentation.api.main import create_app
 from src.presentation.mcp.mcp_server import (
     kinetix_get_project,
     kinetix_health_check,
+    kinetix_inspect_source,
     kinetix_list_projects,
+    kinetix_probe_media,
     kinetix_produce_video,
+    kinetix_trim_video,
     kinetix_update_subtitles,
 )
 
@@ -16,12 +19,15 @@ from src.presentation.mcp.mcp_server import (
 def test_mcp_server_tools_produce_and_update_video(tmp_path: Path) -> None:
     ws = str(tmp_path)
 
-    # 1. Health check via MCP tool
+    # 1. Health check & Source inspect via MCP tools
     health = kinetix_health_check()
     assert health["status"] == "ok"
     assert health["mcp_server"] == "kinetix-ai"
     assert "remotion" in health["supported_engines"]
     assert "hyperframes" in health["supported_engines"]
+
+    source_meta = kinetix_inspect_source("demo://sample", workspace_dir=ws)
+    assert source_meta["source_type"] == "demo"
 
     # 2. Produce video via MCP tool (Antigravity commanding app to make a video)
     result = kinetix_produce_video(
@@ -37,11 +43,13 @@ def test_mcp_server_tools_produce_and_update_video(tmp_path: Path) -> None:
     assert Path(result["final_output_path"]).exists()
     assert len(result["subtitles"]) == 3
 
-    # 3. List & Get projects via MCP tools
+    # 3. List, Get & Probe projects via MCP tools
     projects = kinetix_list_projects(workspace_dir=ws)
     assert len(projects) == 1
     fetched = kinetix_get_project("mcp_ai_demo", workspace_dir=ws)
     assert fetched["engine_type"] == "hyperframes"
+    probe = kinetix_probe_media("mcp_ai_demo", workspace_dir=ws)
+    assert probe["video_codec"] == "h264"
 
     # 4. Update subtitles and switch engine to Remotion via MCP tool
     updated = kinetix_update_subtitles(
@@ -53,6 +61,11 @@ def test_mcp_server_tools_produce_and_update_video(tmp_path: Path) -> None:
     assert updated["engine_type"] == "remotion"
     assert len(updated["subtitles"]) == 2
     assert updated["subtitles"][0]["text"] == "Updated via MCP Line 1"
+    assert len(updated["subtitles"][0]["words"]) == 5
+
+    # 5. Trim video via MCP tool
+    trimmed = kinetix_trim_video("mcp_ai_demo", start_time=0.0, end_time=3.0, workspace_dir=ws)
+    assert Path(trimmed["final_output_path"]).exists()
 
 
 def test_fastapi_mcp_command_endpoint(tmp_path: Path) -> None:

@@ -35,6 +35,23 @@ class ProjectService:
         self.processor = processor or FfmpegAdapter()
         self.transcriber = transcriber or WhisperAdapter()
 
+    def inspect_source(self, source_url: str) -> Dict[str, Any]:
+        """Inspect remote URL or local media file metadata via IMediaDownloader.extract_metadata."""
+        meta = self.downloader.extract_metadata(source_url)
+        # Enrich local file metadata with ffprobe if it's an existing local video file
+        local_candidate = Path(source_url.strip().removeprefix("file://"))
+        if local_candidate.exists() and local_candidate.is_file():
+            try:
+                probe = self.processor.probe_media(local_candidate)
+                meta["duration"] = probe.get("duration_seconds", 0.0)
+                meta["resolution"] = probe.get("resolution", "local")
+                meta["fps"] = probe.get("fps", 30.0)
+                meta["video_codec"] = probe.get("video_codec", "h264")
+                meta["audio_codec"] = probe.get("audio_codec", "aac")
+            except Exception:
+                pass
+        return meta
+
     def create_and_run_project(
         self,
         project_id: str,
@@ -76,7 +93,7 @@ class ProjectService:
         subtitles: List[SubtitleSegment],
         engine_type: RenderEngineType | str | None = None,
     ) -> VideoProject:
-        """Update subtitles for an existing project and re-render steps 4 and 5."""
+        """Update subtitles for an existing project, sync word timestamps, and re-render steps 4 and 5."""
         project = self.repository.get(project_id)
         if not project:
             raise KeyError(f"Project not found: {project_id}")
@@ -89,7 +106,17 @@ class ProjectService:
                 if isinstance(engine_type, str)
                 else engine_type
             )
+
+        for seg in subtitles:
+            seg.ensure_word_timestamps()
         project.subtitles = subtitles
+
+        if project.audio_path and project.audio_path.exists():
+            WhisperAdapter.export_transcript_json(
+                project.subtitles,
+                project.audio_path.with_suffix(".transcript.json"),
+            )
+
         project_dir = self.workspace_root / project.project_id
         renderer = RendererFactory.get_renderer(project.engine_type)
 
@@ -98,10 +125,14 @@ class ProjectService:
         project.current_step = f"Re-rendering overlay ({project.engine_type.value})"
         self.repository.save(project)
 
+        probe_info = self.processor.probe_media(project.raw_video_path)
+        raw_duration = float(probe_info.get("duration_seconds") or 6.0)
+
         overlay_target = project_dir / f"{project.project_id}_overlay.mp4"
         props = {
             "project_id": project.project_id,
             "engine": project.engine_type.value,
+            "duration_seconds": raw_duration,
             "subtitles": [s.to_dict() for s in project.subtitles],
         }
         project.overlay_video_path = renderer.render_composition(
@@ -129,16 +160,14 @@ class ProjectService:
         return self.repository.save(project)
 
     def probe_project_media(self, project_id: str) -> Dict[str, Any]:
-        """Inspect technical stream specifications of a project's final MP4 using FfmpegAdapter.probe_media."""
+        """Inspect technical stream specifications of a project's final MP4 using IVideoProcessor.probe_media."""
         project = self.repository.get(project_id)
         if not project:
             raise KeyError(f"Project not found: {project_id}")
         target = project.final_output_path or project.raw_video_path
         if not target or not target.exists():
             raise FileNotFoundError(f"Media file not found for project: {project_id}")
-        if isinstance(self.processor, FfmpegAdapter):
-            return self.processor.probe_media(target)
-        return {"file_path": str(target), "duration_seconds": 6.0}
+        return self.processor.probe_media(target)
 
     def trim_project_video(
         self,
@@ -146,17 +175,40 @@ class ProjectService:
         start_time: float,
         end_time: float,
     ) -> VideoProject:
-        """Trim the final MP4 of a project between start_time and end_time using FFmpeg."""
+        """Trim the final MP4 of a project between start_time and end_time using IVideoProcessor.trim_video."""
         project = self.repository.get(project_id)
         if not project or not project.final_output_path or not project.final_output_path.exists():
             raise KeyError(f"Completed video not found for project: {project_id}")
-        if not isinstance(self.processor, FfmpegAdapter):
-            raise RuntimeError("Processor does not support trimming.")
 
-        trimmed_path = project.final_output_path.with_name(f"{project.project_id}_trimmed.mp4")
-        self.processor.trim_video(project.final_output_path, trimmed_path, start_time, end_time)
-        project.final_output_path = trimmed_path
+        project_dir = self.workspace_root / project.project_id
+        trimmed_target = project_dir / f"{project.project_id}_trimmed.mp4"
+        source_video = project.final_output_path
+        actual_trimmed = self.processor.trim_video(source_video, trimmed_target, start_time, end_time)
+        project.final_output_path = actual_trimmed
         project.current_step = f"Trimmed ({start_time:.1f}s - {end_time:.1f}s)"
+        return self.repository.save(project)
+
+    def mix_project_audio(
+        self,
+        project_id: str,
+        background_audio_path: Path,
+        bg_volume: float = 0.20,
+    ) -> VideoProject:
+        """Mix background audio/music into the project's final MP4 using IVideoProcessor.mix_audio_tracks."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+
+        project_dir = self.workspace_root / project.project_id
+        mixed_target = project_dir / f"{project.project_id}_mixed.mp4"
+        actual_mixed = self.processor.mix_audio_tracks(
+            project.final_output_path,
+            background_audio_path,
+            mixed_target,
+            bg_volume=bg_volume,
+        )
+        project.final_output_path = actual_mixed
+        project.current_step = f"Audio Mixed (bg volume {int(bg_volume * 100)}%)"
         return self.repository.save(project)
 
     def get_project(self, project_id: str) -> VideoProject | None:
