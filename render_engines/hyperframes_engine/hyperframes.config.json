@@ -1,0 +1,9 @@
+{
+  "project": "kinetix-hyperframes-engine",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "templates": {
+    "CaptionTemplate": "./templates/CaptionTemplate.html"
+  }
+}

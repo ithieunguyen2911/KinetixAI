@@ -1,0 +1,55 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "Inter", sans-serif;
+    }
+    .caption-clip {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 84px;
+      text-align: center;
+      overflow: visible;
+    }
+    .caption-scrim {
+      display: inline-block;
+      background: rgba(15, 17, 23, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      padding: 14px 28px;
+      color: #F9FAFB;
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .word-active {
+      color: #60A5FA;
+    }
+  </style>
+  <div id="root" data-composition-id="captions" data-width="1280" data-height="720">
+    <div id="cap-clip-0" class="clip caption-clip" data-start="0.1" data-duration="1.9" data-track-index="1">
+      <div id="cap-box-0" class="caption-scrim">Kinetix Studio Automated Video Pipeline</div>
+    </div>
+    <div id="cap-clip-1" class="clip caption-clip" data-start="2.0" data-duration="2.0" data-track-index="1">
+      <div id="cap-box-1" class="caption-scrim">Powered by Remotion, HyperFrames &amp; FFmpeg</div>
+    </div>
+    <div id="cap-clip-2" class="clip caption-clip" data-start="4.0" data-duration="1.9" data-track-index="1">
+      <div id="cap-box-2" class="caption-scrim">Spec-Driven Development with GitHub Spec Kit</div>
+    </div>
+  </div>
+  <script>
+    window.__timelines = window.__timelines || {};
+    if (typeof gsap !== "undefined") {
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#cap-box-0", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.16, ease: "power3.out" }, 0.1);
+      tl.to("#cap-box-0", { opacity: 0, duration: 0.12, ease: "power2.in" }, 1.88);
+      tl.fromTo("#cap-box-1", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.16, ease: "power3.out" }, 2.0);
+      tl.to("#cap-box-1", { opacity: 0, duration: 0.12, ease: "power2.in" }, 3.88);
+      tl.fromTo("#cap-box-2", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.16, ease: "power3.out" }, 4.0);
+      tl.to("#cap-box-2", { opacity: 0, duration: 0.12, ease: "power2.in" }, 5.78);
+      window.__timelines["captions"] = tl;
+    }
+  </script>
+</template>

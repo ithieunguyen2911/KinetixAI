@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HyperFrames CaptionTemplate Composition</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1280px;
+      height: 720px;
+      background: transparent;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 68px;
+      font-family: 'Segoe UI', Inter, sans-serif;
+    }
+    .caption-pill {
+      background: rgba(24, 14, 41, 0.92);
+      border: 2px solid #F72585;
+      border-radius: 18px;
+      padding: 18px 36px;
+      color: #FFFFFF;
+      font-size: 38px;
+      font-weight: 800;
+      text-align: center;
+      box-shadow: 0 12px 32px rgba(247, 37, 133, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div id="caption" class="caption-pill">HyperFrames Kinetic Subtitle</div>
+  <script>
+    window.renderHyperFrame = function(timeInSeconds, props) {
+      const el = document.getElementById('caption');
+      const subtitles = (props && props.subtitles) || [];
+      const active = subtitles.find(s => timeInSeconds >= s.start_time && timeInSeconds <= s.end_time);
+      if (active) {
+        el.style.display = 'block';
+        el.textContent = active.text;
+      } else {
+        el.style.display = 'none';
+      }
+    };
+  </script>
+</body>
+</html>

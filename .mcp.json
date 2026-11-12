@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "kinetix-ai": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "D:\\AI_Learning_Repository\\KinetixAI",
+        "run",
+        "python",
+        "-m",
+        "src.presentation.mcp.mcp_server"
+      ]
+    }
+  }
+}

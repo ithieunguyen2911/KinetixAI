@@ -1,0 +1,12 @@
+{
+  "name": "kinetix-hyperframes-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HyperFrames HTML/CSS/GSAP Deterministic Visual Render Engine for KinetixAI",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5"
+  }
+}
