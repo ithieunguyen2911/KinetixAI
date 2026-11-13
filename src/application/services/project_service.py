@@ -329,6 +329,122 @@ class ProjectService:
             "snapshot_path": str(out_img),
         }
 
+    def split_project_video(self, project_id: str, split_time: float) -> Dict[str, Any]:
+        """Split a project's active video into two clips (partA, partB) at split_time."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        splits_dir = project_dir / "splits"
+        part_a, part_b = self.processor.split_video(project.final_output_path, split_time, splits_dir)
+        project.current_step = f"Video Split at {split_time:.2f}s"
+        self.repository.save(project)
+        return {
+            "project_id": project.project_id,
+            "split_time": round(float(split_time), 3),
+            "part_a_path": str(part_a),
+            "part_b_path": str(part_b),
+        }
+
+    def concat_project_clips(
+        self,
+        project_id: str,
+        clip_paths: List[str],
+        transition: str = "none",
+    ) -> VideoProject:
+        """Concatenate multiple video clips into the project's active video."""
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        target = project_dir / f"{project.project_id}_concat.mp4"
+        paths = [Path(p) for p in clip_paths]
+        actual = self.processor.concat_clips(paths, target, transition=transition)
+        project.final_output_path = actual
+        project.current_step = f"Clips Concatenated ({len(paths)} clips)"
+        return self.repository.save(project)
+
+    def split_subtitle_cue(self, project_id: str, split_time: float) -> VideoProject:
+        """Razor-split the subtitle cue spanning split_time into two consecutive cues."""
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+        new_subs: List[SubtitleSegment] = []
+        split_done = False
+        for seg in project.subtitles:
+            if not split_done and (seg.start_time + 0.15) < split_time < (seg.end_time - 0.15):
+                words = [w for w in seg.text.split(" ") if w.strip()]
+                if len(words) >= 2:
+                    mid = len(words) // 2
+                    text_a = " ".join(words[:mid])
+                    text_b = " ".join(words[mid:])
+                else:
+                    text_a = seg.text + " (1)"
+                    text_b = seg.text + " (2)"
+                seg_a = SubtitleSegment(start_time=seg.start_time, end_time=round(split_time, 3), text=text_a)
+                seg_b = SubtitleSegment(start_time=round(split_time, 3), end_time=seg.end_time, text=text_b)
+                seg_a.ensure_word_timestamps()
+                seg_b.ensure_word_timestamps()
+                new_subs.extend([seg_a, seg_b])
+                split_done = True
+            else:
+                new_subs.append(seg)
+        project.subtitles = new_subs
+        project.current_step = f"Subtitle Cue Split at {split_time:.2f}s"
+        return self.repository.save(project)
+
+    def export_project_subtitles(self, project_id: str, fmt: str = "srt") -> Dict[str, Any]:
+        """Export project subtitles into .srt, .vtt, or .transcript.json format."""
+        import json
+
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        project_dir.mkdir(parents=True, exist_ok=True)
+        norm_fmt = fmt.strip().lower().lstrip(".")
+
+        def _fmt_time(seconds: float, sep: str = ",") -> str:
+            ms = int(round((seconds % 1) * 1000))
+            total_s = int(seconds)
+            s = total_s % 60
+            m = (total_s // 60) % 60
+            h = total_s // 3600
+            return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
+
+        if norm_fmt == "vtt":
+            out_path = project_dir / f"{project.project_id}.vtt"
+            lines = ["WEBVTT", ""]
+            for idx, seg in enumerate(project.subtitles, start=1):
+                lines.append(str(idx))
+                lines.append(f"{_fmt_time(seg.start_time, '.')} --> {_fmt_time(seg.end_time, '.')}")
+                lines.append(seg.text)
+                lines.append("")
+            out_path.write_text("\n".join(lines), encoding="utf-8")
+        elif norm_fmt in ("json", "transcript.json"):
+            out_path = project_dir / f"{project.project_id}.transcript.json"
+            payload = {
+                "project_id": project.project_id,
+                "segments": [s.to_dict() for s in project.subtitles],
+            }
+            out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        else:
+            out_path = project_dir / f"{project.project_id}.srt"
+            lines = []
+            for idx, seg in enumerate(project.subtitles, start=1):
+                lines.append(str(idx))
+                lines.append(f"{_fmt_time(seg.start_time, ',')} --> {_fmt_time(seg.end_time, ',')}")
+                lines.append(seg.text)
+                lines.append("")
+            out_path.write_text("\n".join(lines), encoding="utf-8")
+
+        return {
+            "project_id": project.project_id,
+            "format": norm_fmt,
+            "export_path": str(out_path),
+            "cue_count": len(project.subtitles),
+        }
+
     def get_project(self, project_id: str) -> VideoProject | None:
         return self.repository.get(project_id)
 

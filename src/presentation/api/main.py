@@ -15,6 +15,7 @@ from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.presentation.schemas.project_schemas import (
     AudioMasterRequest,
     ColorGradeRequest,
+    ConcatClipsRequest,
     CreateProjectRequest,
     HealthResponse,
     InspectSourceRequest,
@@ -23,6 +24,7 @@ from src.presentation.schemas.project_schemas import (
     ReframeRequest,
     SnapshotRequest,
     SpeedChangeRequest,
+    SplitVideoRequest,
     UpdateSubtitlesRequest,
 )
 
@@ -270,6 +272,41 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 project_id=project_id,
                 timestamp_sec=request.timestamp_sec,
             )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/split")
+    def split_project_video(project_id: str, request: SplitVideoRequest) -> Dict[str, Any]:
+        try:
+            return service.split_project_video(
+                project_id=project_id,
+                split_time=request.split_time,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/concat", response_model=ProjectResponse)
+    def concat_project_clips(project_id: str, request: ConcatClipsRequest) -> ProjectResponse:
+        try:
+            project = service.concat_project_clips(
+                project_id=project_id,
+                clip_paths=request.clip_paths,
+                transition=request.transition,
+            )
+            return ProjectResponse(**project.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/v1/projects/{project_id}/subtitles/export")
+    def export_project_subtitles(project_id: str, fmt: str = "srt") -> Dict[str, Any]:
+        try:
+            return service.export_project_subtitles(project_id=project_id, fmt=fmt)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:

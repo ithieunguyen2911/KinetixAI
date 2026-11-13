@@ -848,6 +848,31 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void BtnExportSubtitles_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentProject == null) return;
+        BtnExportSubtitles.IsEnabled = false;
+        try
+        {
+            var srtRes = await _http.GetAsync($"/api/v1/projects/{_currentProject.ProjectId}/subtitles/export?fmt=srt");
+            var vttRes = await _http.GetAsync($"/api/v1/projects/{_currentProject.ProjectId}/subtitles/export?fmt=vtt");
+            var jsonRes = await _http.GetAsync($"/api/v1/projects/{_currentProject.ProjectId}/subtitles/export?fmt=json");
+            srtRes.EnsureSuccessStatusCode();
+            vttRes.EnsureSuccessStatusCode();
+            jsonRes.EnsureSuccessStatusCode();
+            AppendLog($"Exported multi-format subtitles (.srt, .vtt, .transcript.json) for '{_currentProject.ProjectId}'.");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Subtitle export error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Export Subtitles Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnExportSubtitles.IsEnabled = true;
+        }
+    }
+
     private async void BtnSnapshot_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject == null) return;

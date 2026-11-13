@@ -433,6 +433,8 @@
                                         Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11" Margin="0,0,6,0"/>
                                 <Button x:Name="BtnSplitSubtitleCue" Content="Split Cue at Playhead" Click="BtnSplitSubtitleCue_Click"
                                         Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11" Margin="0,0,6,0"/>
+                                <Button x:Name="BtnExportSubtitles" Content="Export SRT / VTT" Click="BtnExportSubtitles_Click"
+                                        Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11" Margin="0,0,6,0"/>
                                 <Button x:Name="BtnRemoveSubtitleRow" Content="Remove Cue" Click="BtnRemoveSubtitleRow_Click"
                                         Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11"/>
                             </StackPanel>

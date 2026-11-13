@@ -73,6 +73,15 @@ class SnapshotRequest(BaseModel):
     timestamp_sec: float = Field(default=1.0, ge=0.0)
 
 
+class SplitVideoRequest(BaseModel):
+    split_time: float = Field(default=3.0, gt=0.0)
+
+
+class ConcatClipsRequest(BaseModel):
+    clip_paths: List[str] = Field(min_length=1)
+    transition: str = Field(default="none")
+
+
 class UpdateSubtitlesRequest(BaseModel):
     engine_type: str | None = Field(default=None, pattern="^(remotion|hyperframes)$")
     template_id: str | None = Field(default=None)

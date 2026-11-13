@@ -106,10 +106,31 @@ def test_fastapi_health_and_project_lifecycle(tmp_path: Path) -> None:
 
     snap_res = client.post(
         "/api/v1/projects/api_test_01/snapshot",
-        json={"timestamp": 1.0},
+        json={"timestamp_sec": 1.0},
     )
     assert snap_res.status_code == 200
     assert Path(snap_res.json()["snapshot_path"]).exists()
+
+    # 7b. Split, Concat & Multi-format Subtitle Export (.srt, .vtt, .transcript.json)
+    split_res = client.post(
+        "/api/v1/projects/api_test_01/split",
+        json={"split_time": 1.5},
+    )
+    assert split_res.status_code == 200
+    split_data = split_res.json()
+    assert Path(split_data["part_a_path"]).exists()
+    assert Path(split_data["part_b_path"]).exists()
+
+    concat_res = client.post(
+        "/api/v1/projects/api_test_01/concat",
+        json={"clip_paths": [split_data["part_a_path"], split_data["part_b_path"]], "transition": "none"},
+    )
+    assert concat_res.status_code == 200
+
+    for fmt in ("srt", "vtt", "json"):
+        exp_res = client.get(f"/api/v1/projects/api_test_01/subtitles/export?fmt={fmt}")
+        assert exp_res.status_code == 200
+        assert Path(exp_res.json()["export_path"]).exists()
 
     # 8. Download final video stream
     video_res = client.get("/api/v1/projects/api_test_01/video")
