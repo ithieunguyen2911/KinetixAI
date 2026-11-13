@@ -74,12 +74,44 @@ def test_fastapi_health_and_project_lifecycle(tmp_path: Path) -> None:
     # 6. Trim final video via FFmpeg trim endpoint
     trim_res = client.post(
         "/api/v1/projects/api_test_01/trim",
-        json={"start_time": 0.0, "end_time": 3.0},
+        json={"start_time": 0.0, "end_time": 4.0},
     )
     assert trim_res.status_code == 200
     assert trim_res.json()["status"] == "completed"
 
-    # 7. Download final video stream
+    # 7. NLE Speed, Color Grade, Reframe, Audio Master & Snapshot endpoints
+    speed_res = client.post(
+        "/api/v1/projects/api_test_01/speed",
+        json={"speed_factor": 1.25},
+    )
+    assert speed_res.status_code == 200
+
+    grade_res = client.post(
+        "/api/v1/projects/api_test_01/color-grade",
+        json={"look_preset": "teal_orange", "brightness": 0.03, "contrast": 1.08, "saturation": 1.12},
+    )
+    assert grade_res.status_code == 200
+
+    reframe_res = client.post(
+        "/api/v1/projects/api_test_01/reframe",
+        json={"aspect_ratio": "9:16", "blur_background": True},
+    )
+    assert reframe_res.status_code == 200
+
+    audio_res = client.post(
+        "/api/v1/projects/api_test_01/audio-master",
+        json={"remove_silences": False, "normalize_loudness": True, "mix_bgm": True, "bgm_volume": 0.15},
+    )
+    assert audio_res.status_code == 200
+
+    snap_res = client.post(
+        "/api/v1/projects/api_test_01/snapshot",
+        json={"timestamp": 1.0},
+    )
+    assert snap_res.status_code == 200
+    assert Path(snap_res.json()["snapshot_path"]).exists()
+
+    # 8. Download final video stream
     video_res = client.get("/api/v1/projects/api_test_01/video")
     assert video_res.status_code == 200
     assert len(video_res.content) > 1000

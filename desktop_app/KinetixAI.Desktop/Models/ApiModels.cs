@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -35,7 +36,18 @@ public class SubtitleSegmentDto
     [JsonIgnore]
     public int WordCount => Words?.Count > 0
         ? Words.Count
-        : (string.IsNullOrWhiteSpace(Text) ? 0 : Text.Split(' ', System.StringSplitOptions.RemoveEmptyEntries).Length);
+        : (string.IsNullOrWhiteSpace(Text) ? 0 : Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length);
+}
+
+public class TimelineClipBlockVm
+{
+    public string Label { get; set; } = string.Empty;
+    public double StartTime { get; set; }
+    public double EndTime { get; set; }
+    public double LeftPx { get; set; }
+    public double WidthPx { get; set; }
+    public string BackgroundHex { get; set; } = "#1E3A8A";
+    public string BorderHex { get; set; } = "#3B82F6";
 }
 
 public class CreateProjectRequestDto
@@ -83,6 +95,72 @@ public class TrimVideoRequestDto
     public double EndTime { get; set; }
 }
 
+public class SpeedChangeRequestDto
+{
+    [JsonPropertyName("speed_factor")]
+    public double SpeedFactor { get; set; } = 1.25;
+}
+
+public class ColorGradeRequestDto
+{
+    [JsonPropertyName("preset")]
+    public string Preset { get; set; } = "natural";
+
+    [JsonPropertyName("brightness")]
+    public double Brightness { get; set; } = 0.0;
+
+    [JsonPropertyName("contrast")]
+    public double Contrast { get; set; } = 1.0;
+
+    [JsonPropertyName("saturation")]
+    public double Saturation { get; set; } = 1.0;
+
+    [JsonPropertyName("gamma")]
+    public double Gamma { get; set; } = 1.0;
+}
+
+public class ReframeRequestDto
+{
+    [JsonPropertyName("aspect_ratio")]
+    public string AspectRatio { get; set; } = "16:9";
+}
+
+public class AudioMasterRequestDto
+{
+    [JsonPropertyName("remove_silence")]
+    public bool RemoveSilence { get; set; }
+
+    [JsonPropertyName("normalize_loudness")]
+    public bool NormalizeLoudness { get; set; } = true;
+
+    [JsonPropertyName("mix_bgm")]
+    public bool MixBgm { get; set; }
+
+    [JsonPropertyName("bgm_source")]
+    public string BgmSource { get; set; } = "demo://bgm";
+
+    [JsonPropertyName("bg_volume")]
+    public double BgVolume { get; set; } = 0.18;
+}
+
+public class SnapshotRequestDto
+{
+    [JsonPropertyName("timestamp_sec")]
+    public double TimestampSec { get; set; } = 1.0;
+}
+
+public class SnapshotResponseDto
+{
+    [JsonPropertyName("project_id")]
+    public string ProjectId { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp_sec")]
+    public double TimestampSec { get; set; }
+
+    [JsonPropertyName("snapshot_path")]
+    public string SnapshotPath { get; set; } = string.Empty;
+}
+
 public class InspectSourceRequestDto
 {
     [JsonPropertyName("source_url")]
@@ -114,6 +192,9 @@ public class UpdateSubtitlesRequestDto
 {
     [JsonPropertyName("engine_type")]
     public string? EngineType { get; set; }
+
+    [JsonPropertyName("template_id")]
+    public string? TemplateId { get; set; }
 
     [JsonPropertyName("subtitles")]
     public List<SubtitleSegmentDto> Subtitles { get; set; } = new();

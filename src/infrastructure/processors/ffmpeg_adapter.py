@@ -167,6 +167,344 @@ class FfmpegAdapter(IVideoProcessor):
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return self._safe_finalize_output(staging_path, output_path)
 
+    def split_video(
+        self,
+        video_path: Path,
+        split_time: float,
+        output_dir: Path,
+    ) -> List[Path]:
+        """Split video_path at split_time (seconds) into two clip files [part1, part2]."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        probe = self.probe_media(video_path)
+        total_dur = max(1.0, float(probe.get("duration_seconds") or 6.0))
+        if split_time <= 0.1 or split_time >= total_dur - 0.1:
+            raise ValueError(f"split_time ({split_time}s) must be within (0.1s, {total_dur - 0.1:.2f}s).")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        part1 = output_dir / f"{video_path.stem}_part1.mp4"
+        part2 = output_dir / f"{video_path.stem}_part2.mp4"
+        p1 = self.trim_video(video_path, part1, 0.0, split_time)
+        p2 = self.trim_video(video_path, part2, split_time, total_dur)
+        return [p1, p2]
+
+    def concat_clips(
+        self,
+        clip_paths: List[Path],
+        output_path: Path,
+        transition: str = "fade",
+        transition_duration: float = 0.4,
+    ) -> Path:
+        """Concatenate multiple video clips seamlessly into output_path."""
+        if not clip_paths:
+            raise ValueError("clip_paths must not be empty.")
+        for cp in clip_paths:
+            if not cp.exists():
+                raise FileNotFoundError(f"Clip file not found: {cp}")
+        if len(clip_paths) == 1:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(clip_paths[0], output_path)
+            return output_path
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_concat_{output_path.name}")
+        concat_list = output_path.with_name(f".concat_list_{output_path.stem}.txt")
+        lines = [f"file '{str(cp.resolve()).replace(chr(92), '/')}'" for cp in clip_paths]
+        concat_list.write_text("\n".join(lines), encoding="utf-8")
+        try:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_list),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "ultrafast",
+                "-c:a",
+                "aac",
+                str(staging_path),
+            ]
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        finally:
+            if concat_list.exists():
+                concat_list.unlink()
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def change_speed(
+        self,
+        video_path: Path,
+        output_path: Path,
+        speed_factor: float,
+    ) -> Path:
+        """Change playback speed (0.25x to 4.0x) of both video (setpts) and audio (atempo) streams."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        if not (0.25 <= speed_factor <= 4.0):
+            raise ValueError("speed_factor must be between 0.25 and 4.0.")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_speed_{output_path.name}")
+
+        pts_mult = round(1.0 / speed_factor, 4)
+        # Build chained atempo filters if speed_factor < 0.5 or > 2.0
+        atempo_filters: List[str] = []
+        rem = speed_factor
+        while rem > 2.0:
+            atempo_filters.append("atempo=2.0")
+            rem /= 2.0
+        while rem < 0.5:
+            atempo_filters.append("atempo=0.5")
+            rem /= 0.5
+        atempo_filters.append(f"atempo={rem:.3f}")
+        audio_chain = ",".join(atempo_filters)
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            f"setpts={pts_mult}*PTS",
+            "-af",
+            audio_chain,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
+            str(staging_path),
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if res.returncode != 0:
+            # Fallback if source has no audio track
+            cmd_no_audio = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                f"setpts={pts_mult}*PTS",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "ultrafast",
+                str(staging_path),
+            ]
+            subprocess.run(cmd_no_audio, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def apply_color_grade(
+        self,
+        video_path: Path,
+        output_path: Path,
+        preset: str = "natural",
+        brightness: float = 0.0,
+        contrast: float = 1.0,
+        saturation: float = 1.0,
+        gamma: float = 1.0,
+    ) -> Path:
+        """Apply LUT/Color Look preset and eq adjustments (brightness, contrast, saturation, gamma)."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_grade_{output_path.name}")
+
+        preset_key = preset.strip().lower()
+        b, c, s, g = brightness, contrast, saturation, gamma
+        extra_filters: List[str] = []
+
+        if preset_key == "teal_orange":
+            c = round(c * 1.15, 2)
+            s = round(s * 1.25, 2)
+            extra_filters.append("colorbalance=rs=0.12:gs=-0.04:bs=-0.12:rh=0.08:bh=-0.08")
+        elif preset_key == "warm_vintage":
+            b = round(b + 0.03, 2)
+            c = round(c * 0.95, 2)
+            s = round(s * 0.85, 2)
+            extra_filters.append("colorbalance=rm=0.10:gm=0.04:bm=-0.10")
+        elif preset_key == "noir_bw":
+            s = 0.0
+            c = round(c * 1.30, 2)
+            g = round(g * 0.92, 2)
+        elif preset_key == "studio_crisp":
+            c = round(c * 1.12, 2)
+            s = round(s * 1.10, 2)
+            extra_filters.append("unsharp=5:5:0.8:5:5:0.0")
+
+        vf_parts = [f"eq=brightness={b:.2f}:contrast={c:.2f}:saturation={s:.2f}:gamma={g:.2f}"] + extra_filters
+        vf_chain = ",".join(vf_parts)
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            vf_chain,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "copy",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def reframe_aspect_ratio(
+        self,
+        video_path: Path,
+        output_path: Path,
+        aspect_ratio: str = "16:9",
+    ) -> Path:
+        """Reframe video into 16:9 (1280x720), 9:16 vertical Shorts (720x1280 blur-pad), or 1:1 square (720x720)."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_reframe_{output_path.name}")
+
+        ar = aspect_ratio.strip()
+        if ar == "9:16":
+            filter_complex = (
+                "[0:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,boxblur=20:8[bg];"
+                "[0:v]scale=720:-2[fg];"
+                "[bg][fg]overlay=(W-w)/2:(H-h)/2[vout]"
+            )
+        elif ar == "1:1":
+            filter_complex = (
+                "[0:v]scale=720:720:force_original_aspect_ratio=increase,crop=720:720,boxblur=18:6[bg];"
+                "[0:v]scale=720:-2[fg];"
+                "[bg][fg]overlay=(W-w)/2:(H-h)/2[vout]"
+            )
+        else:
+            filter_complex = (
+                "[0:v]scale=1280:720:force_original_aspect_ratio=decrease,"
+                "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x0B0F19[vout]"
+            )
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "[vout]",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "copy",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def remove_silences(
+        self,
+        video_path: Path,
+        output_path: Path,
+        threshold_db: float = -35.0,
+        min_silence_sec: float = 0.35,
+    ) -> Path:
+        """Apply audio silence removal / tight voice pacing filter."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_silence_{output_path.name}")
+
+        af_filter = (
+            f"silenceremove=start_periods=1:start_duration=0.1:start_threshold={threshold_db:.1f}dB:"
+            f"stop_periods=-1:stop_duration={min_silence_sec:.2f}:stop_threshold={threshold_db:.1f}dB"
+        )
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-af",
+            af_filter,
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def normalize_audio(
+        self,
+        video_path: Path,
+        output_path: Path,
+    ) -> Path:
+        """Normalize audio loudness to broadcast EBU R128 standard (-16 LUFS)."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_norm_{output_path.name}")
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-af",
+            "loudnorm=I=-16:TP=-1.5:LRA=11",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def capture_snapshot(
+        self,
+        video_path: Path,
+        timestamp_sec: float,
+        output_image_path: Path,
+    ) -> Path:
+        """Export a single high-resolution PNG frame at timestamp_sec."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_image_path.parent.mkdir(parents=True, exist_ok=True)
+        ts = max(0.0, float(timestamp_sec))
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{ts:.3f}",
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            str(output_image_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return output_image_path
+
     def mix_audio_tracks(
         self,
         video_path: Path,

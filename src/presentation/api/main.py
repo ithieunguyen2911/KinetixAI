@@ -13,11 +13,16 @@ from src.application.services.project_service import ProjectService
 from src.domain.entities.enums import RenderEngineType
 from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.presentation.schemas.project_schemas import (
+    AudioMasterRequest,
+    ColorGradeRequest,
     CreateProjectRequest,
     HealthResponse,
     InspectSourceRequest,
     MixAudioRequest,
     ProjectResponse,
+    ReframeRequest,
+    SnapshotRequest,
+    SpeedChangeRequest,
     UpdateSubtitlesRequest,
 )
 
@@ -143,6 +148,11 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 "kinetix_update_subtitles",
                 "kinetix_probe_media",
                 "kinetix_trim_video",
+                "kinetix_change_speed",
+                "kinetix_apply_color_grade",
+                "kinetix_reframe_video",
+                "kinetix_master_audio",
+                "kinetix_capture_snapshot",
                 "kinetix_inspect_source",
                 "kinetix_launch_desktop_app",
                 "kinetix_health_check",
@@ -193,6 +203,78 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/api/v1/projects/{project_id}/speed", response_model=ProjectResponse)
+    def change_project_speed(project_id: str, request: SpeedChangeRequest) -> ProjectResponse:
+        try:
+            project = service.change_project_speed(
+                project_id=project_id,
+                speed_factor=request.speed_factor,
+            )
+            return ProjectResponse(**project.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/color-grade", response_model=ProjectResponse)
+    def apply_project_color_grade(project_id: str, request: ColorGradeRequest) -> ProjectResponse:
+        try:
+            project = service.apply_project_color_grade(
+                project_id=project_id,
+                preset=request.preset,
+                brightness=request.brightness,
+                contrast=request.contrast,
+                saturation=request.saturation,
+                gamma=request.gamma,
+            )
+            return ProjectResponse(**project.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/reframe", response_model=ProjectResponse)
+    def reframe_project_video(project_id: str, request: ReframeRequest) -> ProjectResponse:
+        try:
+            project = service.reframe_project_video(
+                project_id=project_id,
+                aspect_ratio=request.aspect_ratio,
+            )
+            return ProjectResponse(**project.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/audio-master", response_model=ProjectResponse)
+    def master_project_audio(project_id: str, request: AudioMasterRequest) -> ProjectResponse:
+        try:
+            project = service.master_project_audio(
+                project_id=project_id,
+                remove_silence=request.remove_silence,
+                normalize_loudness=request.normalize_loudness,
+                mix_bgm=request.mix_bgm,
+                bgm_source=request.bgm_source,
+                bg_volume=request.bg_volume,
+            )
+            return ProjectResponse(**project.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/snapshot")
+    def capture_project_snapshot(project_id: str, request: SnapshotRequest) -> Dict[str, Any]:
+        try:
+            return service.capture_project_snapshot(
+                project_id=project_id,
+                timestamp_sec=request.timestamp_sec,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/v1/projects/{project_id}/subtitles", response_model=ProjectResponse)
     def update_subtitles(project_id: str, request: UpdateSubtitlesRequest) -> ProjectResponse:
         try:
@@ -212,6 +294,7 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 project_id=project_id,
                 subtitles=domain_subs,
                 engine_type=request.engine_type,
+                template_id=request.template_id,
             )
             return ProjectResponse(**project.to_dict())
         except KeyError as exc:

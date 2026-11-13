@@ -1,4 +1,4 @@
-# Implementation Plan: KinetixAI (FlowVids-AI) Automated Video Production, Desktop Studio & Antigravity MCP
+# Implementation Plan: KinetixAI (FlowVids-AI) v2.0 — Professional Non-Linear Video Editor (NLE) & Polyglot Automation Studio
 
 **Branch**: `001-auto-video-desktop-system` | **Date**: 2026-11-13 | **Spec**: [spec.md](spec.md)
 
@@ -6,61 +6,49 @@
 
 ---
 
-## 1. Danh Sách Toàn Bộ Tính Năng Hiện Có (Feature Inventory)
+## 1. Summary & Architectural Vision
 
-Hệ thống **KinetixAI (FlowVids-AI)** bao gồm **7 phân hệ (28 tính năng cụ thể)** kết hợp 5 công cụ GitHub (`yt-dlp`, `Whisper`, `HyperFrames`, `Remotion`, `FFmpeg`) cùng **GitHub Spec Kit** và **Antigravity MCP**:
+Transform **KinetixAI (FlowVids-AI)** into a full-featured **Professional Non-Linear Video Editor (NLE Workstation v2.0)** modeled after DaVinci Resolve / Premiere Pro / CapCut Pro while strictly enforcing the **Polyglot Modular Monolith + Clean Architecture + SOLID** rules established in `.specify/memory/constitution.md`:
 
-| Mã Tính Năng | Phân Hệ / Layer | Tên Tính Năng | File Thực Thi Chính | Trạng Thái Kiểm Định |
-| :--- | :--- | :--- | :--- | :--- |
-| **F1.1** | `yt-dlp` (`IMediaDownloader`) | Tải video/audio từ URL thực tế với bộ lọc format MP4/M4A <= 1080p & progress hook | `src/infrastructure/downloaders/ytdlp_adapter.py` | Đã có & hoạt động |
-| **F1.2** | `yt-dlp` (`IMediaDownloader`) | Cắt phân đoạn video trực tiếp khi tải (`download_ranges`: `start_time`..`end_time`) | `src/infrastructure/downloaders/ytdlp_adapter.py` | Đã có & hoạt động |
-| **F1.3** | `yt-dlp` (`IMediaDownloader`) | Nhập (Ingest) trực tiếp file video nội bộ từ ổ cứng (`C:\...` hoặc `file://`) | `src/infrastructure/downloaders/ytdlp_adapter.py` | Đã có & hoạt động |
-| **F1.4** | `yt-dlp` (`IMediaDownloader`) | Tạo video phát sóng mẫu `demo://sample` có **giọng nói tiếng Anh thực tế** (`SpeechSynthesizer` + FFmpeg HD 720p) | `src/infrastructure/downloaders/ytdlp_adapter.py` | Đã có & hoạt động |
-| **F1.5** | `yt-dlp` (`IMediaDownloader`) | Trích xuất Metadata nguồn video trước khi tải (`extract_metadata`: title, resolution, fps, duration) | `src/infrastructure/downloaders/ytdlp_adapter.py` | Cần nối thêm API `/api/v1/sources/inspect` & nút UI |
-| **F2.1** | `FFmpeg` (`IVideoProcessor`) | Phân tích thông số kỹ thuật luồng video/audio bằng `ffprobe` (`probe_media`: codec, FPS, Hz, size, duration) | `src/infrastructure/processors/ffmpeg_adapter.py` | Đã có & hoạt động |
-| **F2.2** | `FFmpeg` (`IVideoProcessor`) | Tách âm thanh WAV 16kHz Mono chuẩn Whisper kèm bộ lọc thoại `highpass=f=80,lowpass=f=7600` (`extract_audio`) | `src/infrastructure/processors/ffmpeg_adapter.py` | Đã có & hoạt động |
-| **F2.3** | `FFmpeg` (`IVideoProcessor`) | Cắt ngắn (Trim) video thành phẩm không cần render lại (`trim_video`) + chống khóa file Windows | `src/infrastructure/processors/ffmpeg_adapter.py` | Cần bổ sung cơ chế chống khóa file khi đang phát trên WPF |
-| **F2.4** | `FFmpeg` (`IVideoProcessor`) | Trộn đa luồng âm thanh (Audio Ducking / Mixing giọng đọc + nhạc nền `mix_audio_tracks`) | `src/infrastructure/processors/ffmpeg_adapter.py` | Cần khai báo vào `IVideoProcessor` ABC |
-| **F2.5** | `FFmpeg` (`IVideoProcessor`) | Ghép lớp phủ đồ họa chuyển động (`colorkey` overlay compositing) + xuất phụ đề kép `.srt` & `.vtt` (`merge_and_export`) | `src/infrastructure/processors/ffmpeg_adapter.py` | Đã có & hoạt động |
-| **F3.1** | `Whisper` (`ITranscriber`) | Nhận diện giọng nói AI (`faster-whisper` với `vad_filter=True`, `word_timestamps=True` & `openai-whisper`) | `src/infrastructure/transcribers/whisper_adapter.py` | Đã có & hoạt động |
-| **F3.2** | `Whisper` (`ITranscriber`) | Nhận diện giọng nói Offline tức thì trên Windows (`System.Speech.Recognition`) khi để trống Script và chưa tải model nặng | `src/infrastructure/transcribers/whisper_adapter.py` | Cần nâng cấp để tự động nghe file WAV khi để trống Script |
-| **F3.3** | `Whisper` (`ITranscriber`) | Căn chỉnh phụ đề theo kịch bản (`_align_script_to_duration`) kèm tính toán `WordTimestamp` từng từ | `src/infrastructure/transcribers/whisper_adapter.py` | Cần tự động đồng bộ lại `words` khi người dùng sửa chữ trên UI |
-| **F3.4** | `Whisper` (`ITranscriber`) | Xuất file `.transcript.json` chuẩn HyperFrames (`words: [{id, text, start, end}]`) | `src/infrastructure/transcribers/whisper_adapter.py` | Đã có & hoạt động |
-| **F4.1** | `Application` (`RendererFactory`) | Chuyển đổi linh hoạt giữa `RemotionAdapter` và `HyperFramesAdapter` qua `RenderEngineType` | `src/application/factories/renderer_factory.py` | Đã có & hoạt động |
-| **F4.2** | `Remotion` (`IVisualRenderer`) | Dựng đồ họa React/TypeScript (`CaptionTemplate.tsx` dùng `<Sequence>`, `spring()`, tô sáng từng từ Karaoke) | `render_engines/remotion_engine/` | Cần đồng bộ `duration_seconds` theo thời lượng thực của video gốc |
-| **F4.3** | `HyperFrames` (`IVisualRenderer`) | Sinh HTML composition chuẩn 12-Rule HyperFrames Contract (`index.html` + `compositions/captions.html`, `<template>`, `class="clip"`, `gsap.fromTo`, `window.__timelines`) | `render_engines/hyperframes_engine/` | Cần đồng bộ `duration_seconds` theo thời lượng thực của video gốc |
-| **F5.1** | `Application` (`AutoVideoPipeline`) | Điều phối luồng 5 bước tự động qua Dependency Injection kèm callback tiến độ thời gian thực | `src/application/pipelines/auto_video_pipeline.py` | Đã có & hoạt động |
-| **F5.2** | `Presentation` (`FastAPI`) | REST API Server (`/api/v1/health`, `/projects`, `/subtitles`, `/probe`, `/trim`, `/sources/inspect`, `/video`, `/mcp/*`) | `src/presentation/api/main.py` | Cần bổ sung `/api/v1/sources/inspect` |
-| **F5.3** | `Presentation` (`MCP Server`) | MCP Server `kinetix-ai` (`kinetix_produce_video`, `kinetix_update_subtitles`, `kinetix_probe_media`, `kinetix_trim_video`, `kinetix_inspect_source`, `kinetix_launch_desktop_app`) + cờ `--self-test` | `src/presentation/mcp/mcp_server.py` | Cần sửa `--self-test` không bị treo `stdio` và thêm 3 MCP tools mới |
-| **F6.1** | `Desktop App` (`KinetixAI.Desktop`) | Giao diện Studio NLE 3 cột chuyên nghiệp (Dark Slate `#090A0F`/`#11131A`/`#3B82F6`), 100% Custom Dark Templates cho `ComboBox`, `DataGrid`, `ListBox`, `Slider` | `desktop_app/KinetixAI.Desktop/App.xaml` | Đã có & hoạt động |
-| **F6.2** | `Desktop App` (`KinetixAI.Desktop`) | Màn hình **16:9 Program Video Monitor (`MediaElement`)** tích hợp sẵn kèm Play/Pause, Stop, Scrub Bar & Timecode | `desktop_app/KinetixAI.Desktop/MainWindow.xaml` | Đã có & hoạt động |
-| **F6.3** | `Desktop App` (`KinetixAI.Desktop`) | Bảng **Whisper Subtitle & Word-Timing Editor (`DataGrid`)** + nút Thêm/Xóa dòng + nút **Re-Render Subtitles** | `desktop_app/KinetixAI.Desktop/MainWindow.xaml.cs` | Cần gọi `GridSubtitles.CommitEdit()` trước khi gửi API |
-| **F6.4** | `Desktop App` (`KinetixAI.Desktop`) | Công cụ **Non-Linear Trim Clip (FFmpeg)**, **FFprobe Stream Inspector**, nút **Inspect Source**, và nút **Auto-Whisper (Clear Script)** | `desktop_app/KinetixAI.Desktop/MainWindow.xaml.cs` | Cần thêm nút `Inspect` và `Auto-Whisper` trên UI |
+1. **Core Backend & Orchestrator (`Python 3.11+` + `FastAPI` + `Pydantic v2`)**:
+   - Encapsulates `yt-dlp` and `Whisper` (`faster-whisper` / `openai-whisper` / Windows Speech STT) via pure OOP Adapters (`YtDlpAdapter`, `WhisperAdapter`) inheriting from `src/domain/interfaces/`.
+2. **Visual Render Engines (`Node.js 20+` / `TypeScript`)**:
+   - Encapsulates `remotion-dev/remotion` (React) and `heygen-com/hyperframes` (HTML/CSS/GSAP) via `RemotionAdapter`, `HyperFramesAdapter`, and `RendererFactory` supporting **4 Professional Motion Templates** (`CaptionTemplate`, `KineticTitleCard`, `SocialPopCaptions`, `TechCalloutHUD`).
+3. **Media & Non-Linear Editing Engine (`FFmpeg` + `ffprobe`)**:
+   - Encapsulates all timeline editing, color grading, reframing, speed ramping, transition concatenation, silence jump-cut removal, audio loudness mastering, BGM ducking, and frame snapshots inside `FfmpegAdapter(IVideoProcessor)`.
+4. **Native Windows Desktop Client (`C# .NET WPF` — `KinetixAI.Desktop`)**:
+   - 4-Zone Studio Workstation with **Left Media Pool & FX Tabs**, **Center Program Monitor** (Frame Step `-1f`/`+1f`, Set In/Out, Razor Split, Snapshot PNG), **Right Inspector & Subtitle Cue Dock**, and **Bottom Visual Multi-Track Timeline (`V2 Motion Overlay`, `V1 Video Track`, `S1 Subtitle Track`, `A1 Audio & Waveform Track`)**.
 
 ---
 
-## 2. Technical Context
+## 2. Quy Hoạch 8 Phân Hệ Chức Năng Chỉnh Sửa Video Chuyên Nghiệp (NLE Feature Architecture)
 
-- **Language/Version**: Python 3.11+ (managed via `uv`), Node.js 24+ / TypeScript 5+, C# 12 / .NET 10.0 (`net10.0-windows` WPF Desktop)
-- **Primary Dependencies**:
-  - **Python Core & API**: `fastapi`, `uvicorn`, `pydantic` (v2), `yt-dlp`, `faster-whisper`, `openai-whisper`, `ffmpeg-python`, `httpx`, `streamlit`, `mcp`, `pytest`
-  - **Visual Render Engines**: `remotion`, `@remotion/cli`, `@remotion/renderer`, `react`, `react-dom`, `hyperframes` (HTML/CSS/GSAP deterministic renderer + CLI bridge)
-  - **Media Processing**: `FFmpeg` 8.x CLI (`ffmpeg`, `ffprobe`) + `ffmpeg-python`
-  - **Windows Desktop Client**: .NET WPF (`System.Net.Http.Json`, custom dark NLE control templates, integrated `MediaElement` monitor, process manager for FastAPI backend)
-- **Storage**: File-system workspace (`workspace/` for project artifacts, raw downloads, extracted WAV audio, `.transcript.json`, `.srt`, `.vtt`, rendered overlay MP4s, and final composited MP4s) + JSON project state persistence (`workspace/projects.json`).
-- **Testing**: `pytest` (unit tests + integration tests) + `dotnet build` verification for the WPF Desktop Client.
+| Phân Hệ (Module) | Công Cụ Gốc | Các Chức Năng Chuyên Nghiệp Cụ Thể | Tầng Kiến Trúc (Clean Architecture) |
+| :--- | :--- | :--- | :--- |
+| **M1. Media Bin & Ingest Studio** | `yt-dlp` + `ffprobe` | • **M1.1**: Tải video/audio từ URL (YouTube/TikTok/Vimeo) chọn độ phân giải <= 1080p<br>• **M1.2**: Cắt khoảng thời gian ngay khi tải (`download_ranges`: `start_time`..`end_time`)<br>• **M1.3**: Kiểm tra Metadata nguồn (`extract_metadata`: codec, FPS, thời lượng) trước khi tải<br>• **M1.4**: Tạo mẫu phát sóng Studio (`demo://sample`) và nhạc nền Ambient (`demo://bgm`) | `Domain`: `IMediaDownloader`<br>`Infra`: `YtDlpAdapter`<br>`API`: `POST /api/v1/sources/inspect` |
+| **M2. Non-Linear Timeline Editing (NLE)** | `FFmpeg` (`IVideoProcessor`) | • **M2.1**: **Trim In / Out** cắt chính xác điểm đầu – điểm cuối không làm hỏng luồng<br>• **M2.2**: **Razor Split at Playhead** chia đôi clip tại đúng vị trí con trỏ thời gian (`split_video`)<br>• **M2.3**: **Multi-Clip Concat & Transitions** nối nhiều clip kèm hiệu ứng chuyển cảnh (`fade`, `wipeleft`, `dissolve` qua `xfade` / `acrossfade`)<br>• **M2.4**: **Speed Ramping (`0.25x` – `4.0x`)** tua nhanh/chậm đồng bộ cả hình (`setpts`) và tiếng (`atempo`) | `Domain`: `IVideoProcessor`<br>`Infra`: `FfmpegAdapter`<br>`API`: `/trim`, `/split`, `/concat`, `/speed` |
+| **M3. Color Grading & Visual FX Studio** | `FFmpeg` (`eq`, `curves`, `unsharp`, `hue`) | • **M3.1**: Thanh trượt chỉnh màu chuyên sâu: **Brightness**, **Contrast**, **Saturation**, **Gamma**<br>• **M3.2**: **5 Bộ Lọc Màu Điện Ảnh (LUT / Look Presets)**:<br>  1. `natural` (Chuẩn Rec.709)<br>  2. `teal_orange` (Điện ảnh Teal & Orange)<br>  3. `warm_vintage` (Màu phim ấm cổ điển)<br>  4. `noir_bw` (Đen trắng tương phản cao)<br>  5. `studio_crisp` (Tăng độ nét `unsharp` + tương phản phát sóng) | `Domain`: `ColorLookPreset`, `ColorGradeSpec`<br>`Infra`: `FfmpegAdapter.apply_color_grade`<br>`API`: `POST /api/v1/projects/{id}/color-grade` |
+| **M4. Smart Aspect Ratio & Social Reframe** | `FFmpeg` (`scale`, `crop`, `boxblur`, `overlay`) | • **M4.1**: **`16:9` Landscape (`1280x720` / `1920x1080`)** chuẩn YouTube / Desktop<br>• **M4.2**: **`9:16` Vertical Shorts/Reels/TikTok (`720x1280`)** tự động tạo nền mờ (`boxblur=20:10`) phía sau video chính, không bị viền đen<br>• **M4.3**: **`1:1` Square (`720x720`)** chuẩn bài đăng mạng xã hội | `Domain`: `AspectRatioPreset`<br>`Infra`: `FfmpegAdapter.reframe_aspect_ratio`<br>`API`: `POST /api/v1/projects/{id}/reframe` |
+| **M5. Dual Motion Graphics & 4 Studio Templates** | `Remotion` (React) & `HyperFrames` (HTML/GSAP) | • **M5.1**: `CaptionTemplate` — Phụ đề Lower-Third truyền hình + Karaoke từng từ<br>• **M5.2**: `KineticTitleCard` — Màn hình tiêu đề mở đầu (Intro Title Card) + Lower-Third<br>• **M5.3**: `SocialPopCaptions` — Phụ đề nổi bật giữa/dưới màn hình kiểu Shorts/Reels<br>• **M5.4**: `TechCalloutHUD` — Hộp thông tin góc trên + phụ đề + thanh tiến trình chạy dọc đáy video | `Domain`: `TemplatePreset`, `IVisualRenderer`<br>`App`: `RendererFactory`<br>`Infra`: `RemotionAdapter`, `HyperFramesAdapter` |
+| **M6. AI Speech, Silence Cut & Audio Mastering** | `Whisper` + `FFmpeg` (`silenceremove`, `loudnorm`, `amix`) | • **M6.1**: Nhận diện giọng nói `faster-whisper` (VAD + Word Timestamps) & Windows Speech STT<br>• **M6.2**: **Auto-Silence Jump-Cut (`remove_silences`)** tự động cắt bỏ khoảng lặng ngập ngừng trong video nói chuyện<br>• **M6.3**: **Broadcast Loudness Normalization (`normalize_audio`)** chuẩn hóa âm lượng EBU R128 (`loudnorm`)<br>• **M6.4**: **Multi-Track Audio Mixer & Ducking (`mix_audio_tracks`)** trộn giọng nói chính với nhạc nền (có sẵn `demo://bgm` hoặc file MP3/WAV ngoài) | `Domain`: `ITranscriber`, `IVideoProcessor`<br>`Infra`: `WhisperAdapter`, `FfmpegAdapter`<br>`API`: `/audio-master`, `/mix-audio` |
+| **M7. Frame Snapshot & Master Export Presets** | `FFmpeg` (`vframes`, `libx264`) | • **M7.1**: **Capture Frame Snapshot (`capture_snapshot`)** chụp ảnh tĩnh PNG độ nét cao tại đúng giây Playhead đang dừng<br>• **M7.2**: Xuất phụ đề đa định dạng: `.srt`, `.vtt`, và `.transcript.json` chuẩn HyperFrames | `Infra`: `FfmpegAdapter.capture_snapshot`<br>`API`: `POST /api/v1/projects/{id}/snapshot` |
+| **M8. Windows WPF NLE Workstation UI & MCP Bridge** | `C# .NET WPF` + `MCP Server` (`kinetix-ai`) | • **M8.1**: **Visual Multi-Track Timeline (`V2 Overlay`, `V1 Video`, `S1 Subtitles`, `A1 Audio`)** hiển thị trực quan các khối clip/phụ đề theo trục thời gian, click vào khối để nhảy Playhead<br>• **M8.2**: **Program Monitor Deck** với nút nhích từng khung hình (`-1f`, `+1f`), nút đặt điểm cắt `Set In [` / `Set Out ]`, nút chụp ảnh `Snapshot PNG`<br>• **M8.3**: **Color Grading, Speed, Aspect Ratio & Audio Mastering Panel** ngay trên giao diện Studio<br>• **M8.4**: Đồng bộ thời gian thực 2 chiều với **AI Antigravity MCP (`kinetix-ai`)** | `Presentation`: `desktop_app/KinetixAI.Desktop` & `src/presentation/mcp/mcp_server.py` |
 
 ---
 
-## 3. Constitution Check
+## 3. Constitution Check (Kiểm Định Tuân Thủ Kiến Trúc)
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **Gate 1 - Clean Architecture & Layer Isolation (Principle I)**: PASS. `src/domain`, `src/application`, `src/infrastructure`, `src/presentation`, `render_engines/`, and `desktop_app/` are strictly separated.
-- **Gate 2 - SOLID & Dependency Inversion (Principle II)**: PASS. All adapter methods (`download`, `extract_metadata`, `extract_audio`, `probe_media`, `trim_video`, `mix_audio_tracks`, `merge_and_export`, `transcribe`, `render_composition`) are declared on the Domain ABC interfaces (`IMediaDownloader`, `IVideoProcessor`, `ITranscriber`, `IVisualRenderer`).
-- **Gate 3 - Adapter Pattern for 5 External Tools (Principle III)**: PASS. All 5 tools (`YtDlpAdapter`, `WhisperAdapter`, `FfmpegAdapter`, `RemotionAdapter`, `HyperFramesAdapter`) inherit from `src/domain/interfaces/` ABCs.
-- **Gate 4 - Strict Type Hinting & Data Contracts (Principle IV)**: PASS. Python 3.11+ type hints and Pydantic v2 models enforce all API and subprocess JSON contracts.
-- **Gate 5 - Test-Driven Quality & Pytest Coverage (Principle V)**: PASS. Unit and integration test suites under `tests/unit/` and `tests/integration/` cover all layers and edge cases.
+- **Gate 1 - Clean Architecture & Layer Isolation (Principle I)**: **PASS**.
+  - `src/domain`: Chỉ chứa Entities (`VideoProject`, `SubtitleSegment`, `WordTimestamp`, `ColorGradeSpec`, `MediaAsset`, `RenderJob`), Enums (`RenderEngineType`, `JobStatus`, `AspectRatioPreset`, `ColorLookPreset`, `TemplatePreset`) và 4 Interfaces (`IMediaDownloader`, `ITranscriber`, `IVisualRenderer`, `IVideoProcessor`).
+  - `src/application`: Chỉ chứa `AutoVideoPipeline`, `RendererFactory`, `ProjectService`.
+  - `src/infrastructure`: Chứa 5 Adapters (`YtDlpAdapter`, `WhisperAdapter`, `FfmpegAdapter`, `RemotionAdapter`, `HyperFramesAdapter`) + `JsonProjectRepository`.
+  - `src/presentation` & `desktop_app/`: Chứa FastAPI, CLI, MCP Server, Streamlit, và C# WPF Client.
+- **Gate 2 - SOLID & Dependency Inversion (Principle II)**: **PASS**. Mọi phương thức NLE mới đều được định nghĩa trên `IVideoProcessor` và `IMediaDownloader` ABCs.
+- **Gate 3 - Adapter Pattern for 5 External Tools (Principle III)**: **PASS**. Không có bất kỳ lệnh gọi `subprocess`, `ffmpeg`, `yt_dlp`, hay `whisper` nào nằm ngoài `src/infrastructure/`.
+- **Gate 4 - Strict Type Hinting & Data Contracts (Principle IV)**: **PASS**. Toàn bộ request/response NLE mới đều được định nghĩa bằng Pydantic v2 (`src/presentation/schemas/project_schemas.py`) và DTO C# (`desktop_app/KinetixAI.Desktop/Models/ApiModels.cs`).
+- **Gate 5 - Test-Driven Quality & Pytest Coverage (Principle V)**: **PASS**. Mọi tính năng NLE mới đều có unit test và integration test trong `tests/`.
 
 ---
 
@@ -68,43 +56,43 @@ Hệ thống **KinetixAI (FlowVids-AI)** bao gồm **7 phân hệ (28 tính năn
 
 ```text
 KinetixAI/
-├── .specify/                         # GitHub Spec Kit configuration, constitution, templates, scripts
-├── .agents/skills/                   # Spec Kit (speckit-*) & HyperFrames (heygen-com/hyperframes) skills
+├── .specify/                                    # GitHub Spec Kit Constitution, templates & scripts
+├── .agents/skills/                              # Spec Kit (speckit-*) & HyperFrames (heygen-com/hyperframes) skills
 ├── specs/001-auto-video-desktop-system/
-│   ├── spec.md                       # Feature Specification
-│   ├── plan.md                       # Implementation Plan & Feature Inventory (this file)
-│   ├── research.md                   # Phase 0 Architecture & Tooling Research
-│   ├── data-model.md                 # Phase 1 Domain Entities & Validation Rules
-│   ├── quickstart.md                 # Phase 1 Validation & Run Guide
+│   ├── spec.md                                  # Feature Specification (v2.0 Professional NLE)
+│   ├── plan.md                                  # Implementation Plan (this file)
+│   ├── research.md                              # Phase 0 NLE Filtergraph & Timeline Research
+│   ├── data-model.md                            # Phase 1 Domain Entities & Enums
+│   ├── quickstart.md                            # Phase 1 Validation Guide
 │   ├── contracts/
-│   │   └── api-and-render-contracts.md
-│   └── tasks.md                      # Phase 2 Executable Task Checklist
+│   │   └── api-and-render-contracts.md          # Phase 1 ABC & REST API Contracts
+│   └── tasks.md                                 # Phase 2 Dependency-Ordered Tasks (T001-T045)
 ├── render_engines/
-│   ├── remotion_engine/              # React/TypeScript compositions (Root.tsx, CaptionTemplate.tsx, render.mjs)
-│   └── hyperframes_engine/           # HTML/CSS/GSAP compositions (index.html, compositions/captions.html, render.mjs)
+│   ├── remotion_engine/                         # React/TypeScript compositions (4 Studio Templates)
+│   └── hyperframes_engine/                      # HTML/CSS/GSAP compositions (4 Studio Templates, 12-Rule Contract)
 ├── src/
 │   ├── domain/
-│   │   ├── entities/                 # enums.py, subtitle_segment.py, media_asset.py, render_job.py, video_project.py
-│   │   └── interfaces/               # media_downloader.py, transcriber.py, visual_renderer.py, video_processor.py
+│   │   ├── entities/                            # enums.py, subtitle_segment.py, nle_specs.py, media_asset.py, render_job.py, video_project.py
+│   │   └── interfaces/                          # media_downloader.py, transcriber.py, visual_renderer.py, video_processor.py
 │   ├── application/
-│   │   ├── factories/                # renderer_factory.py
-│   │   ├── pipelines/                # auto_video_pipeline.py
-│   │   └── services/                 # project_service.py
+│   │   ├── factories/                           # renderer_factory.py
+│   │   ├── pipelines/                           # auto_video_pipeline.py
+│   │   └── services/                            # project_service.py
 │   ├── infrastructure/
-│   │   ├── downloaders/              # ytdlp_adapter.py
-│   │   ├── transcribers/             # whisper_adapter.py
-│   │   ├── processors/               # ffmpeg_adapter.py
-│   │   ├── renderers/                # remotion_adapter.py, hyperframes_adapter.py
-│   │   └── repositories/             # json_project_repository.py
+│   │   ├── downloaders/                         # ytdlp_adapter.py
+│   │   ├── transcribers/                        # whisper_adapter.py
+│   │   ├── processors/                          # ffmpeg_adapter.py
+│   │   ├── renderers/                           # remotion_adapter.py, hyperframes_adapter.py
+│   │   └── repositories/                        # json_project_repository.py
 │   └── presentation/
-│       ├── schemas/                  # project_schemas.py
-│       ├── api/                      # main.py
-│       ├── cli/                      # main.py
-│       ├── mcp/                      # mcp_server.py
-│       └── ui/                       # streamlit_app.py
+│       ├── schemas/                             # project_schemas.py
+│       ├── api/                                 # main.py
+│       ├── cli/                                 # main.py
+│       ├── mcp/                                 # mcp_server.py
+│       └── ui/                                  # streamlit_app.py
 ├── desktop_app/
-│   └── KinetixAI.Desktop/            # App.xaml, MainWindow.xaml, MainWindow.xaml.cs, Models/ApiModels.cs
+│   └── KinetixAI.Desktop/                       # App.xaml, MainWindow.xaml, MainWindow.xaml.cs, Models/ApiModels.cs
 └── tests/
-    ├── unit/                         # test_domain_entities.py, test_renderer_factory.py, test_adapters.py, test_auto_video_pipeline.py
-    └── integration/                  # test_end_to_end_pipeline.py, test_fastapi_endpoints.py, test_mcp_server.py
+    ├── unit/                                    # test_domain_entities.py, test_renderer_factory.py, test_adapters.py, test_auto_video_pipeline.py
+    └── integration/                             # test_end_to_end_pipeline.py, test_fastapi_endpoints.py, test_mcp_server.py
 ```

@@ -5,12 +5,17 @@ from fastapi.testclient import TestClient
 
 from src.presentation.api.main import create_app
 from src.presentation.mcp.mcp_server import (
+    kinetix_apply_color_grade,
+    kinetix_capture_snapshot,
+    kinetix_change_speed,
     kinetix_get_project,
     kinetix_health_check,
     kinetix_inspect_source,
     kinetix_list_projects,
+    kinetix_master_audio,
     kinetix_probe_media,
     kinetix_produce_video,
+    kinetix_reframe_video,
     kinetix_trim_video,
     kinetix_update_subtitles,
 )
@@ -64,8 +69,38 @@ def test_mcp_server_tools_produce_and_update_video(tmp_path: Path) -> None:
     assert len(updated["subtitles"][0]["words"]) == 5
 
     # 5. Trim video via MCP tool
-    trimmed = kinetix_trim_video("mcp_ai_demo", start_time=0.0, end_time=3.0, workspace_dir=ws)
+    trimmed = kinetix_trim_video("mcp_ai_demo", start_time=0.0, end_time=4.0, workspace_dir=ws)
     assert Path(trimmed["final_output_path"]).exists()
+
+    # 6. Professional NLE MCP tools (Speed, Color Grade, Reframe, Audio Master, Snapshot)
+    sped = kinetix_change_speed("mcp_ai_demo", speed_factor=1.5, workspace_dir=ws)
+    assert Path(sped["final_output_path"]).exists()
+
+    graded = kinetix_apply_color_grade(
+        "mcp_ai_demo",
+        preset="teal_orange",
+        brightness=0.02,
+        contrast=1.08,
+        saturation=1.15,
+        workspace_dir=ws,
+    )
+    assert Path(graded["final_output_path"]).exists()
+
+    reframed = kinetix_reframe_video("mcp_ai_demo", aspect_ratio="1:1", workspace_dir=ws)
+    assert Path(reframed["final_output_path"]).exists()
+
+    mastered = kinetix_master_audio(
+        "mcp_ai_demo",
+        remove_silence=False,
+        normalize_loudness=True,
+        mix_bgm=True,
+        bg_volume=0.15,
+        workspace_dir=ws,
+    )
+    assert Path(mastered["final_output_path"]).exists()
+
+    snap = kinetix_capture_snapshot("mcp_ai_demo", timestamp_sec=0.5, workspace_dir=ws)
+    assert Path(snap["snapshot_path"]).exists()
 
 
 def test_fastapi_mcp_command_endpoint(tmp_path: Path) -> None:

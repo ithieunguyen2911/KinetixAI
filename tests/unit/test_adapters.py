@@ -30,6 +30,67 @@ def test_ytdlp_adapter_demo_and_local_ingestion(tmp_path: Path) -> None:
     local_meta = downloader.extract_metadata(str(raw_video))
     assert local_meta["source_type"] == "file"
 
+    # Test demo://bgm ambient music synthesis
+    bgm_meta = downloader.extract_metadata("demo://bgm")
+    assert bgm_meta["source_type"] == "demo"
+    bgm_file = downloader.download("demo://bgm", tmp_path)
+    assert bgm_file.exists()
+    assert bgm_file.stat().st_size > 1000
+
+
+def test_ffmpeg_nle_operations(tmp_path: Path) -> None:
+    downloader = YtDlpAdapter()
+    processor = FfmpegAdapter()
+    raw_video = downloader.download("demo://sample", tmp_path)
+
+    # 1. split_video & concat_clips
+    part_a, part_b = processor.split_video(raw_video, split_time=3.0, output_dir=tmp_path / "splits")
+    assert part_a.exists() and part_b.exists()
+    concat_out = tmp_path / "rejoined.mp4"
+    processor.concat_clips([part_a, part_b], concat_out)
+    assert concat_out.exists()
+    assert processor.probe_media(concat_out)["duration_seconds"] >= 5.0
+
+    # 2. change_speed (2.0x fast-forward)
+    speed_out = tmp_path / "speed_2x.mp4"
+    processor.change_speed(raw_video, speed_out, speed_factor=2.0)
+    assert speed_out.exists()
+    assert processor.probe_media(speed_out)["duration_seconds"] <= 3.6
+
+    # 3. apply_color_grade (teal_orange)
+    graded_out = tmp_path / "graded.mp4"
+    processor.apply_color_grade(
+        raw_video,
+        graded_out,
+        preset="teal_orange",
+        brightness=0.04,
+        contrast=1.1,
+        saturation=1.15,
+    )
+    assert graded_out.exists()
+
+    # 4. reframe_aspect_ratio (9:16 vertical with blurred background)
+    reframed_out = tmp_path / "vertical_9_16.mp4"
+    processor.reframe_aspect_ratio(raw_video, reframed_out, aspect_ratio="9:16")
+    assert reframed_out.exists()
+    v_probe = processor.probe_media(reframed_out)
+    assert v_probe["width"] == 720
+    assert v_probe["height"] == 1280
+
+    # 5. normalize_audio & remove_silences
+    norm_out = tmp_path / "normalized.mp4"
+    processor.normalize_audio(raw_video, norm_out)
+    assert norm_out.exists()
+    desilenced_out = tmp_path / "desilenced.mp4"
+    processor.remove_silences(raw_video, desilenced_out)
+    assert desilenced_out.exists()
+
+    # 6. capture_snapshot
+    snap_png = tmp_path / "snapshot.png"
+    processor.capture_snapshot(raw_video, timestamp_sec=1.5, output_image_path=snap_png)
+    assert snap_png.exists()
+    assert snap_png.stat().st_size > 500
+
 
 def test_ffmpeg_adapter_extract_audio_and_whisper_transcribe(tmp_path: Path) -> None:
     downloader = YtDlpAdapter()
@@ -104,3 +165,12 @@ def test_remotion_and_hyperframes_adapters_render_overlays(tmp_path: Path) -> No
     assert (tmp_path / "hf_overlay.mp4.hyperframes.json").exists()
     assert (tmp_path / "hyperframes_composition" / "index.html").exists()
     assert (tmp_path / "hyperframes_composition" / "compositions" / "captions.html").exists()
+
+    # Test NLE Studio Templates across both engines
+    rem_hud = tmp_path / "remotion_hud.mp4"
+    remotion.render_composition("TechCalloutHUD", props, rem_hud)
+    assert rem_hud.exists()
+
+    hf_pop = tmp_path / "hf_social_pop.mp4"
+    hyperframes.render_composition("SocialPopCaptions", props, hf_pop)
+    assert hf_pop.exists()

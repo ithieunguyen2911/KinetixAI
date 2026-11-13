@@ -78,7 +78,11 @@ class YtDlpAdapter(IMediaDownloader):
         output_dir.mkdir(parents=True, exist_ok=True)
         normalized = url.strip()
 
-        # 1. Built-in spoken sample video generator (uses Windows SpeechSynthesizer + FFmpeg HD test broadcast)
+        # 1. Built-in spoken sample video or ambient BGM generator
+        if normalized.lower() == "demo://bgm":
+            bgm_target = output_dir / "demo_ambient_bgm.wav"
+            return self._generate_demo_bgm(bgm_target, duration_seconds=8)
+
         if normalized.startswith("demo://") or normalized.lower() == "sample":
             target = output_dir / "demo_sample_raw.mp4"
             self._generate_demo_video(target, duration_seconds=6)
@@ -125,12 +129,32 @@ class YtDlpAdapter(IMediaDownloader):
             return prepared
 
     @staticmethod
+    def _generate_demo_bgm(output_path: Path, duration_seconds: int = 8) -> Path:
+        """Synthesize a warm ambient stereo background music track (A-minor triad pad) via FFmpeg lavfi."""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        expr = "0.18*sin(2*PI*220*t)+0.14*sin(2*PI*261.63*t)+0.14*sin(2*PI*329.63*t)+0.08*sin(2*PI*440*t)"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"aevalsrc='{expr}':s=16000:d={duration_seconds}",
+            "-af",
+            f"afade=t=in:st=0:d=0.6,afade=t=out:st={max(1, duration_seconds - 1)}:d=1.0",
+            "-acodec",
+            "pcm_s16le",
+            str(output_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return output_path
+
+    @staticmethod
     def _generate_demo_video(output_path: Path, duration_seconds: int = 6) -> Path:
-        """Generate a 1280x720 30fps studio reference video with real synthesized speech audio."""
+        """Generate a 1280x720 30fps dark-slate studio reference video with real synthesized speech audio."""
         speech_wav = output_path.parent / "demo_synthesized_speech.wav"
         spoken_ok = False
 
-        # Attempt to synthesize real human speech via Windows System.Speech so Whisper can transcribe actual voice
         try:
             ps_script = (
                 "Add-Type -AssemblyName System.Speech; "
@@ -151,6 +175,13 @@ class YtDlpAdapter(IMediaDownloader):
         except Exception:
             spoken_ok = False
 
+        studio_bg_filter = (
+            "drawgrid=w=64:h=64:t=1:c=0x1E293B@0.45,"
+            "drawbox=x=40:y=96:w=1200:h=440:color=0x111827@0.65:t=fill,"
+            "drawbox=x=40:y=96:w=1200:h=2:color=0x3B82F6@0.85:t=fill,"
+            "drawbox=x=80:y=290:w='min(1120,180*t)':h=6:color=0x3B82F6@0.95:t=fill"
+        )
+
         if spoken_ok:
             cmd = [
                 "ffmpeg",
@@ -158,13 +189,13 @@ class YtDlpAdapter(IMediaDownloader):
                 "-f",
                 "lavfi",
                 "-i",
-                f"testsrc2=size=1280x720:rate=30:duration={duration_seconds}",
+                f"color=c=0x0B0F19:s=1280x720:r=30:d={duration_seconds}",
                 "-i",
                 str(speech_wav),
                 "-filter_complex",
-                f"[1:a]apad=whole_dur={duration_seconds}[aout]",
+                f"[0:v]{studio_bg_filter}[vout];[1:a]apad=whole_dur={duration_seconds}[aout]",
                 "-map",
-                "0:v:0",
+                "[vout]",
                 "-map",
                 "[aout]",
                 "-c:v",
@@ -186,11 +217,13 @@ class YtDlpAdapter(IMediaDownloader):
                 "-f",
                 "lavfi",
                 "-i",
-                f"testsrc2=size=1280x720:rate=30:duration={duration_seconds}",
+                f"color=c=0x0B0F19:s=1280x720:r=30:d={duration_seconds}",
                 "-f",
                 "lavfi",
                 "-i",
                 f"sine=frequency=440:sample_rate=16000:duration={duration_seconds}",
+                "-vf",
+                studio_bg_filter,
                 "-c:v",
                 "libx264",
                 "-pix_fmt",

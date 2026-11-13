@@ -142,6 +142,90 @@ def kinetix_trim_video(
 
 
 @mcp.tool()
+def kinetix_change_speed(
+    project_id: str,
+    speed_factor: float = 1.25,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Change playback speed (0.25x slow-mo to 4.0x fast-forward) of a project's video and audio."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.change_project_speed(project_id=project_id, speed_factor=speed_factor)
+    return updated.to_dict()
+
+
+@mcp.tool()
+def kinetix_apply_color_grade(
+    project_id: str,
+    preset: str = "teal_orange",
+    brightness: float = 0.0,
+    contrast: float = 1.0,
+    saturation: float = 1.0,
+    gamma: float = 1.0,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Apply LUT / Color Look preset ('natural', 'teal_orange', 'warm_vintage', 'noir_bw', 'studio_crisp') and eq parameters."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.apply_project_color_grade(
+        project_id=project_id,
+        preset=preset,
+        brightness=brightness,
+        contrast=contrast,
+        saturation=saturation,
+        gamma=gamma,
+    )
+    return updated.to_dict()
+
+
+@mcp.tool()
+def kinetix_reframe_video(
+    project_id: str,
+    aspect_ratio: str = "9:16",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Reframe a project's video into '16:9' (landscape), '9:16' (vertical Shorts with blurred background), or '1:1' (square)."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.reframe_project_video(project_id=project_id, aspect_ratio=aspect_ratio)
+    return updated.to_dict()
+
+
+@mcp.tool()
+def kinetix_master_audio(
+    project_id: str,
+    remove_silence: bool = False,
+    normalize_loudness: bool = True,
+    mix_bgm: bool = True,
+    bg_volume: float = 0.18,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Master project audio: optional silence jump-cut removal, EBU R128 loudness normalization, and ambient BGM mixing."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.master_project_audio(
+        project_id=project_id,
+        remove_silence=remove_silence,
+        normalize_loudness=normalize_loudness,
+        mix_bgm=mix_bgm,
+        bg_volume=bg_volume,
+    )
+    return updated.to_dict()
+
+
+@mcp.tool()
+def kinetix_capture_snapshot(
+    project_id: str,
+    timestamp_sec: float = 1.0,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Capture a high-resolution PNG frame snapshot at timestamp_sec from a project's video."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.capture_project_snapshot(project_id=project_id, timestamp_sec=timestamp_sec)
+
+
+@mcp.tool()
 def kinetix_update_subtitles(
     project_id: str,
     subtitles_input: str,

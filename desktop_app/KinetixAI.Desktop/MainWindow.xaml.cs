@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -20,7 +21,7 @@ public partial class MainWindow : Window
 {
     private readonly HttpClient _http = new() { BaseAddress = new Uri("http://127.0.0.1:8000"), Timeout = TimeSpan.FromMinutes(5) };
     private readonly DispatcherTimer _mcpSyncTimer = new() { Interval = TimeSpan.FromSeconds(3) };
-    private readonly DispatcherTimer _playheadTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly DispatcherTimer _playheadTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
     private Process? _backendProcess;
     private ProjectResponseDto? _currentProject;
     private int _knownProjectCount;
@@ -29,12 +30,14 @@ public partial class MainWindow : Window
 
     public ObservableCollection<SubtitleSegmentDto> SubtitleItems { get; } = new();
     public ObservableCollection<ProjectResponseDto> ProjectItems { get; } = new();
+    public ObservableCollection<TimelineClipBlockVm> TimelineSubtitleBlocks { get; } = new();
 
     public MainWindow()
     {
         InitializeComponent();
         GridSubtitles.ItemsSource = SubtitleItems;
         LstProjects.ItemsSource = ProjectItems;
+        IcTimelineSubtitles.ItemsSource = TimelineSubtitleBlocks;
         _mcpSyncTimer.Tick += McpSyncTimer_Tick;
         _playheadTimer.Tick += PlayheadTimer_Tick;
         Loaded += MainWindow_Loaded;
@@ -43,7 +46,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        AppendLog("Workstation initialized. Verifying Core Orchestrator & MCP bridge...");
+        AppendLog("Kinetix Studio NLE v2.0 initialized. Verifying Core Orchestrator & MCP bridge...");
         await EnsureBackendRunningAsync();
         await RefreshProjectsAsync(selectLatestIfNew: true);
         _mcpSyncTimer.Start();
@@ -77,9 +80,83 @@ public partial class MainWindow : Window
     {
         if (!_isPlaying || !VideoPlayer.NaturalDuration.HasTimeSpan) return;
         var pos = VideoPlayer.Position.TotalSeconds;
-        var total = VideoPlayer.NaturalDuration.TimeSpan.TotalSeconds;
+        var total = Math.Max(0.5, VideoPlayer.NaturalDuration.TimeSpan.TotalSeconds);
         SliderScrub.Value = pos;
         TxtTimecode.Text = $"{pos:00.00}s / {total:00.00}s";
+        UpdatePlayheadCursorPosition(pos, total);
+    }
+
+    private void UpdatePlayheadCursorPosition(double currentSec, double totalSec)
+    {
+        double trackWidth = Math.Max(100.0, TimelineTrackArea.ActualWidth);
+        double ratio = Math.Clamp(currentSec / Math.Max(0.5, totalSec), 0.0, 1.0);
+        Canvas.SetLeft(PlayheadLine, ratio * (trackWidth - 2));
+    }
+
+    private void RebuildVisualTimeline()
+    {
+        double totalDur = Math.Max(1.0, _videoDurationSeconds);
+        double trackWidth = Math.Max(200.0, TimelineTrackArea.ActualWidth);
+
+        TxtRuler1.Text = $"00:{(totalDur * 0.2):00.0}";
+        TxtRuler2.Text = $"00:{(totalDur * 0.4):00.0}";
+        TxtRuler3.Text = $"00:{(totalDur * 0.6):00.0}";
+        TxtRuler4.Text = $"00:{(totalDur * 0.8):00.0}";
+        TxtRuler5.Text = $"00:{totalDur:00.0}";
+
+        TimelineSubtitleBlocks.Clear();
+        foreach (var seg in SubtitleItems)
+        {
+            double left = (seg.StartTime / totalDur) * trackWidth;
+            double width = Math.Max(24.0, ((seg.EndTime - seg.StartTime) / totalDur) * trackWidth - 2);
+            TimelineSubtitleBlocks.Add(new TimelineClipBlockVm
+            {
+                Label = $"{seg.StartTime:0.0}s: {seg.Text}",
+                StartTime = seg.StartTime,
+                EndTime = seg.EndTime,
+                LeftPx = Math.Max(0, left),
+                WidthPx = width,
+            });
+        }
+
+        if (_currentProject != null)
+        {
+            TxtTrackV2.Text = $"{_currentProject.EngineUpper} OVERLAY  |  {_currentProject.TemplateId}  ({SubtitleItems.Count} cues)";
+        }
+    }
+
+    private void TimelineTrackArea_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        RebuildVisualTimeline();
+    }
+
+    private void TimelineCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        double width = Math.Max(1.0, TimelineTrackArea.ActualWidth);
+        var pt = e.GetPosition(TimelineTrackArea);
+        double targetSec = Math.Clamp(pt.X / width, 0.0, 1.0) * _videoDurationSeconds;
+        SeekMonitorTo(targetSec);
+    }
+
+    private void SubtitleTimelineBlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is TimelineClipBlockVm block)
+        {
+            SeekMonitorTo(block.StartTime);
+            e.Handled = true;
+        }
+    }
+
+    private void SeekMonitorTo(double seconds)
+    {
+        double clamped = Math.Clamp(seconds, 0.0, _videoDurationSeconds);
+        SliderScrub.Value = clamped;
+        TxtTimecode.Text = $"{clamped:00.00}s / {_videoDurationSeconds:00.00}s";
+        UpdatePlayheadCursorPosition(clamped, _videoDurationSeconds);
+        if (VideoPlayer.Source != null)
+        {
+            VideoPlayer.Position = TimeSpan.FromSeconds(clamped);
+        }
     }
 
     private string FindRepositoryRoot()
@@ -100,7 +177,7 @@ public partial class MainWindow : Window
     {
         if (await IsBackendHealthyAsync())
         {
-            TxtBackendStatus.Text = "Core API: 127.0.0.1:8000 (Online)";
+            TxtBackendStatus.Text = "Core API: Online";
             DotBackend.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
             return;
         }
@@ -124,7 +201,7 @@ public partial class MainWindow : Window
                 await Task.Delay(500);
                 if (await IsBackendHealthyAsync())
                 {
-                    TxtBackendStatus.Text = "Core API: 127.0.0.1:8000 (Online)";
+                    TxtBackendStatus.Text = "Core API: Online";
                     DotBackend.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
                     AppendLog("FastAPI Core Orchestrator online at http://127.0.0.1:8000.");
                     return;
@@ -160,7 +237,7 @@ public partial class MainWindow : Window
             var list = await _http.GetFromJsonAsync<ProjectResponseDto[]>("/api/v1/projects");
             if (list == null) return;
 
-            TxtProjectCount.Text = $"{list.Length} projects";
+            TxtProjectCount.Text = $"{list.Length} items";
 
             bool countChanged = list.Length != ProjectItems.Count;
             if (countChanged)
@@ -198,15 +275,25 @@ public partial class MainWindow : Window
         _currentProject = project;
         TxtProjectId.Text = project.ProjectId;
         TxtSourceUrl.Text = project.SourceUrl;
-        TxtTemplateId.Text = project.TemplateId;
         CmbEngineType.SelectedIndex = project.EngineType == "hyperframes" ? 1 : 0;
+
+        for (int i = 0; i < CmbTemplateId.Items.Count; i++)
+        {
+            if (CmbTemplateId.Items[i] is ComboBoxItem item &&
+                string.Equals(item.Tag?.ToString(), project.TemplateId, StringComparison.OrdinalIgnoreCase))
+            {
+                CmbTemplateId.SelectedIndex = i;
+                break;
+            }
+        }
+
         TxtStepStatus.Text = project.CurrentStep;
         TxtProgressPercent.Text = $"{project.ProgressPercent}%";
         PbPipeline.Value = project.ProgressPercent;
         TxtOutputPath.Text = string.IsNullOrWhiteSpace(project.FinalOutputPath)
             ? string.Empty
             : project.FinalOutputPath;
-        TxtStatusRight.Text = $"Active Project: {project.ProjectId} [{project.EngineUpper}]";
+        TxtStatusRight.Text = $"Active Project: {project.ProjectId} [{project.EngineUpper} | {project.TemplateId}]";
 
         SubtitleItems.Clear();
         foreach (var seg in project.Subtitles)
@@ -214,8 +301,9 @@ public partial class MainWindow : Window
             SubtitleItems.Add(seg);
         }
 
-        LoadVideoIntoMonitor(project.FinalOutputPath);
         await LoadMediaProbeSpecsAsync(project.ProjectId);
+        RebuildVisualTimeline();
+        LoadVideoIntoMonitor(project.FinalOutputPath);
     }
 
     private void LoadVideoIntoMonitor(string? videoPath)
@@ -262,7 +350,10 @@ public partial class MainWindow : Window
             TxtSpecAudio.Text = $"AUD: {probe.AudioCodec} / {probe.SampleRate}Hz";
             TxtSpecDuration.Text = $"DUR: {probe.DurationSeconds:0.00}s";
             TxtSpecSize.Text = $"SIZE: {(probe.SizeBytes / 1024.0):0.0} KB";
-            TxtTrimEnd.Text = $"{probe.DurationSeconds:0.0}";
+            TxtTrimEnd.Text = probe.DurationSeconds.ToString("0.00", CultureInfo.InvariantCulture);
+            TxtTrackV1.Text = $"MASTER VIDEO STREAM ({probe.VideoCodec} • {probe.Resolution} • {probe.Fps:0.00} fps • {probe.DurationSeconds:0.00}s)";
+            TxtTrackA1.Text = $"AUDIO STREAM  ▂▄▆█▄▂▅▇▃▂▆█▄▂▅▇▃▂▆█▄▂  ({probe.AudioCodec.ToUpperInvariant()} / {probe.SampleRate}Hz)";
+            TxtTimelineSummary.Text = $"4 Tracks Active (V2, V1, S1, A1) | {probe.Resolution} @ {probe.Fps:0.00} fps";
         }
         catch
         {
@@ -277,6 +368,7 @@ public partial class MainWindow : Window
             _videoDurationSeconds = VideoPlayer.NaturalDuration.TimeSpan.TotalSeconds;
             SliderScrub.Maximum = _videoDurationSeconds;
             TxtTimecode.Text = $"00.00s / {_videoDurationSeconds:00.00}s";
+            RebuildVisualTimeline();
         }
     }
 
@@ -310,14 +402,44 @@ public partial class MainWindow : Window
         VideoPlayer.Stop();
         _isPlaying = false;
         BtnPlayPause.Content = "Play";
-        SliderScrub.Value = 0;
-        TxtTimecode.Text = $"00.00s / {_videoDurationSeconds:00.00}s";
+        SeekMonitorTo(0.0);
+    }
+
+    private void BtnStepBack_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoPlayer.Source == null) return;
+        VideoPlayer.Pause();
+        _isPlaying = false;
+        BtnPlayPause.Content = "Play";
+        double target = Math.Max(0.0, SliderScrub.Value - (1.0 / 30.0));
+        SeekMonitorTo(target);
+    }
+
+    private void BtnStepForward_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoPlayer.Source == null) return;
+        VideoPlayer.Pause();
+        _isPlaying = false;
+        BtnPlayPause.Content = "Play";
+        double target = Math.Min(_videoDurationSeconds, SliderScrub.Value + (1.0 / 30.0));
+        SeekMonitorTo(target);
+    }
+
+    private void BtnMarkIn_Click(object sender, RoutedEventArgs e)
+    {
+        TxtTrimStart.Text = SliderScrub.Value.ToString("0.00", CultureInfo.InvariantCulture);
+        AppendLog($"Marked Trim IN at {SliderScrub.Value:0.00}s");
+    }
+
+    private void BtnMarkOut_Click(object sender, RoutedEventArgs e)
+    {
+        TxtTrimEnd.Text = SliderScrub.Value.ToString("0.00", CultureInfo.InvariantCulture);
+        AppendLog($"Marked Trim OUT at {SliderScrub.Value:0.00}s");
     }
 
     private void SliderScrub_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (VideoPlayer.Source == null) return;
-        VideoPlayer.Position = TimeSpan.FromSeconds(SliderScrub.Value);
+        SeekMonitorTo(SliderScrub.Value);
     }
 
     private string GetSelectedEngine()
@@ -329,43 +451,13 @@ public partial class MainWindow : Window
         return "remotion";
     }
 
-    private async void BtnRunAiCommand_Click(object sender, RoutedEventArgs e)
+    private string GetSelectedTemplate()
     {
-        BtnRunAiCommand.IsEnabled = false;
-        try
+        if (CmbTemplateId.SelectedItem is ComboBoxItem item && item.Tag is string t)
         {
-            await EnsureBackendRunningAsync();
-            var prompt = TxtAiCommand.Text.Trim();
-            if (string.IsNullOrWhiteSpace(prompt)) return;
-
-            AppendLog($"[MCP Dispatch] Executing command: \"{prompt}\"");
-            TxtStepStatus.Text = "Executing MCP video command...";
-            PbPipeline.Value = 30;
-
-            var req = new AiMcpCommandRequestDto
-            {
-                Prompt = prompt,
-                SourceUrl = TxtSourceUrl.Text.Trim(),
-            };
-            var response = await _http.PostAsJsonAsync("/api/v1/mcp/command", req);
-            response.EnsureSuccessStatusCode();
-            var project = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (project != null)
-            {
-                await BindProjectAsync(project);
-                AppendLog($"[MCP Dispatch] Completed '{project.ProjectId}' -> {project.FinalOutputPath}");
-                await RefreshProjectsAsync();
-            }
+            return t.Trim();
         }
-        catch (Exception ex)
-        {
-            AppendLog($"MCP Command Error: {ex.Message}");
-            MessageBox.Show(ex.Message, "MCP Command Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            BtnRunAiCommand.IsEnabled = true;
-        }
+        return "CaptionTemplate";
     }
 
     private async Task ReleaseVideoPlayerLockAsync()
@@ -424,6 +516,46 @@ public partial class MainWindow : Window
         AppendLog("Script cleared. Pipeline will use automatic speech-to-text transcription (Whisper / Windows Speech STT) on the extracted WAV audio.");
     }
 
+    private async void BtnRunAiCommand_Click(object sender, RoutedEventArgs e)
+    {
+        BtnRunAiCommand.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            await ReleaseVideoPlayerLockAsync();
+            var prompt = TxtAiCommand.Text.Trim();
+            if (string.IsNullOrWhiteSpace(prompt)) return;
+
+            AppendLog($"[MCP Dispatch] Executing command: \"{prompt}\"");
+            TxtStepStatus.Text = "Executing MCP video command...";
+            PbPipeline.Value = 30;
+
+            var req = new AiMcpCommandRequestDto
+            {
+                Prompt = prompt,
+                SourceUrl = TxtSourceUrl.Text.Trim(),
+            };
+            var response = await _http.PostAsJsonAsync("/api/v1/mcp/command", req);
+            response.EnsureSuccessStatusCode();
+            var project = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (project != null)
+            {
+                await BindProjectAsync(project);
+                AppendLog($"[MCP Dispatch] Completed '{project.ProjectId}' -> {project.FinalOutputPath}");
+                await RefreshProjectsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"MCP Command Error: {ex.Message}");
+            MessageBox.Show(ex.Message, "MCP Command Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnRunAiCommand.IsEnabled = true;
+        }
+    }
+
     private async void BtnRunPipeline_Click(object sender, RoutedEventArgs e)
     {
         BtnRunPipeline.IsEnabled = false;
@@ -433,19 +565,20 @@ public partial class MainWindow : Window
             await ReleaseVideoPlayerLockAsync();
 
             var engine = GetSelectedEngine();
+            var template = GetSelectedTemplate();
             var scriptVal = TxtScriptText.Text.Trim();
             var req = new CreateProjectRequestDto
             {
                 ProjectId = TxtProjectId.Text.Trim(),
                 SourceUrl = TxtSourceUrl.Text.Trim(),
                 EngineType = engine,
-                TemplateId = TxtTemplateId.Text.Trim(),
+                TemplateId = template,
                 ScriptText = string.IsNullOrWhiteSpace(scriptVal) ? null : scriptVal,
             };
 
-            TxtStepStatus.Text = $"Running 5-Step Pipeline ({engine.ToUpperInvariant()})...";
+            TxtStepStatus.Text = $"Running 5-Step Pipeline ({engine.ToUpperInvariant()} / {template})...";
             PbPipeline.Value = 25;
-            AppendLog($"Starting pipeline for '{req.ProjectId}' [engine={req.EngineType}, source={req.SourceUrl}]...");
+            AppendLog($"Starting pipeline for '{req.ProjectId}' [engine={req.EngineType}, template={template}, source={req.SourceUrl}]...");
 
             var response = await _http.PostAsJsonAsync("/api/v1/projects", req);
             if (!response.IsSuccessStatusCode)
@@ -483,7 +616,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Commit any active cell or row edit in the DataGrid before reading SubtitleItems
         GridSubtitles.CommitEdit(DataGridEditingUnit.Cell, true);
         GridSubtitles.CommitEdit(DataGridEditingUnit.Row, true);
 
@@ -493,12 +625,14 @@ public partial class MainWindow : Window
             await ReleaseVideoPlayerLockAsync();
 
             var engine = GetSelectedEngine();
+            var template = GetSelectedTemplate();
             var req = new UpdateSubtitlesRequestDto
             {
                 EngineType = engine,
+                TemplateId = template,
                 Subtitles = SubtitleItems.ToList(),
             };
-            AppendLog($"Re-rendering '{_currentProject.ProjectId}' overlay with {engine.ToUpperInvariant()}...");
+            AppendLog($"Re-rendering '{_currentProject.ProjectId}' overlay with {engine.ToUpperInvariant()} ({template})...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/subtitles", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
@@ -523,8 +657,8 @@ public partial class MainWindow : Window
     private async void BtnTrimVideo_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject == null) return;
-        if (!double.TryParse(TxtTrimStart.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double startSec) ||
-            !double.TryParse(TxtTrimEnd.Text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double endSec) ||
+        if (!double.TryParse(TxtTrimStart.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double startSec) ||
+            !double.TryParse(TxtTrimEnd.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double endSec) ||
             endSec <= startSec)
         {
             MessageBox.Show("Enter valid Start and End seconds (End > Start).", "Invalid Trim Range", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -560,6 +694,189 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void BtnApplySpeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentProject == null) return;
+        double speed = 1.0;
+        if (CmbSpeedFactor.SelectedItem is ComboBoxItem item &&
+            double.TryParse(item.Tag?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed))
+        {
+            speed = parsed;
+        }
+
+        BtnApplySpeed.IsEnabled = false;
+        try
+        {
+            await ReleaseVideoPlayerLockAsync();
+            AppendLog($"Applying playback speed {speed:0.00}x to '{_currentProject.ProjectId}' via FFmpeg (setpts + atempo)...");
+            var response = await _http.PostAsJsonAsync(
+                $"/api/v1/projects/{_currentProject.ProjectId}/speed",
+                new SpeedChangeRequestDto { SpeedFactor = speed }
+            );
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await BindProjectAsync(updated);
+                AppendLog($"Speed ramping ({speed:0.00}x) complete: {updated.FinalOutputPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Speed change error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Speed Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnApplySpeed.IsEnabled = true;
+        }
+    }
+
+    private async Task ApplyAspectRatioAsync(string aspectRatio)
+    {
+        if (_currentProject == null) return;
+        try
+        {
+            await ReleaseVideoPlayerLockAsync();
+            AppendLog($"Reframing '{_currentProject.ProjectId}' to {aspectRatio} via FFmpeg...");
+            var response = await _http.PostAsJsonAsync(
+                $"/api/v1/projects/{_currentProject.ProjectId}/reframe",
+                new ReframeRequestDto { AspectRatio = aspectRatio }
+            );
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await BindProjectAsync(updated);
+                AppendLog($"Reframed ({aspectRatio}) saved: {updated.FinalOutputPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Reframe error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Reframe Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void BtnAspect16x9_Click(object sender, RoutedEventArgs e) => await ApplyAspectRatioAsync("16:9");
+    private async void BtnAspect9x16_Click(object sender, RoutedEventArgs e) => await ApplyAspectRatioAsync("9:16");
+    private async void BtnAspect1x1_Click(object sender, RoutedEventArgs e) => await ApplyAspectRatioAsync("1:1");
+
+    private void BtnResetColor_Click(object sender, RoutedEventArgs e)
+    {
+        CmbColorPreset.SelectedIndex = 0;
+        SliderBrightness.Value = 0.0;
+        SliderContrast.Value = 1.0;
+        SliderSaturation.Value = 1.0;
+    }
+
+    private async void BtnApplyColorGrade_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentProject == null) return;
+        string preset = "natural";
+        if (CmbColorPreset.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            preset = tag;
+        }
+
+        BtnApplyColorGrade.IsEnabled = false;
+        try
+        {
+            await ReleaseVideoPlayerLockAsync();
+            var req = new ColorGradeRequestDto
+            {
+                Preset = preset,
+                Brightness = Math.Round(SliderBrightness.Value, 2),
+                Contrast = Math.Round(SliderContrast.Value, 2),
+                Saturation = Math.Round(SliderSaturation.Value, 2),
+                Gamma = 1.0,
+            };
+            AppendLog($"Applying Color Grade '{preset}' (B={req.Brightness}, C={req.Contrast}, S={req.Saturation}) via FFmpeg...");
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/color-grade", req);
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await BindProjectAsync(updated);
+                AppendLog($"Color Grade applied: {updated.FinalOutputPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Color grade error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Color Grade Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnApplyColorGrade.IsEnabled = true;
+        }
+    }
+
+    private async void BtnMasterAudio_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentProject == null) return;
+        BtnMasterAudio.IsEnabled = false;
+        try
+        {
+            await ReleaseVideoPlayerLockAsync();
+            var req = new AudioMasterRequestDto
+            {
+                RemoveSilence = ChkSilenceCut.IsChecked == true,
+                NormalizeLoudness = ChkLoudnorm.IsChecked == true,
+                MixBgm = ChkMixBgm.IsChecked == true,
+                BgmSource = "demo://bgm",
+                BgVolume = 0.18,
+            };
+            AppendLog($"Executing Audio Mastering (SilenceCut={req.RemoveSilence}, Loudnorm={req.NormalizeLoudness}, MixBGM={req.MixBgm})...");
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/audio-master", req);
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await BindProjectAsync(updated);
+                AppendLog($"Audio Mastering complete: {updated.FinalOutputPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Audio master error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Audio Mastering Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnMasterAudio.IsEnabled = true;
+        }
+    }
+
+    private async void BtnSnapshot_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentProject == null) return;
+        BtnSnapshot.IsEnabled = false;
+        try
+        {
+            double ts = Math.Max(0.0, SliderScrub.Value);
+            var response = await _http.PostAsJsonAsync(
+                $"/api/v1/projects/{_currentProject.ProjectId}/snapshot",
+                new SnapshotRequestDto { TimestampSec = ts }
+            );
+            response.EnsureSuccessStatusCode();
+            var snap = await response.Content.ReadFromJsonAsync<SnapshotResponseDto>();
+            if (snap != null && File.Exists(snap.SnapshotPath))
+            {
+                AppendLog($"Snapshot PNG captured at {snap.TimestampSec:0.00}s -> {snap.SnapshotPath}");
+                Process.Start(new ProcessStartInfo(snap.SnapshotPath) { UseShellExecute = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Snapshot error: {ex.Message}");
+        }
+        finally
+        {
+            BtnSnapshot.IsEnabled = true;
+        }
+    }
+
     private void BtnAddSubtitleRow_Click(object sender, RoutedEventArgs e)
     {
         double lastEnd = SubtitleItems.Count > 0 ? SubtitleItems.Max(s => s.EndTime) : 0.0;
@@ -569,6 +886,43 @@ public partial class MainWindow : Window
             EndTime = Math.Round(lastEnd + 2.0, 2),
             Text = "New caption segment",
         });
+        RebuildVisualTimeline();
+    }
+
+    private void BtnSplitSubtitleCue_Click(object sender, RoutedEventArgs e)
+    {
+        double playhead = SliderScrub.Value;
+        var targetCue = SubtitleItems.FirstOrDefault(s => playhead > s.StartTime + 0.2 && playhead < s.EndTime - 0.2)
+                        ?? GridSubtitles.SelectedItem as SubtitleSegmentDto;
+        if (targetCue == null)
+        {
+            AppendLog("Move playhead inside a subtitle cue (or select a cue) to split it.");
+            return;
+        }
+
+        double splitPoint = (playhead > targetCue.StartTime + 0.2 && playhead < targetCue.EndTime - 0.2)
+            ? Math.Round(playhead, 2)
+            : Math.Round((targetCue.StartTime + targetCue.EndTime) / 2.0, 2);
+
+        var words = targetCue.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        int midIdx = Math.Max(1, words.Length / 2);
+        string firstText = words.Length > 1 ? string.Join(" ", words.Take(midIdx)) : targetCue.Text + " (1)";
+        string secondText = words.Length > 1 ? string.Join(" ", words.Skip(midIdx)) : targetCue.Text + " (2)";
+
+        double origEnd = targetCue.EndTime;
+        targetCue.EndTime = splitPoint;
+        targetCue.Text = firstText;
+
+        int insertIdx = SubtitleItems.IndexOf(targetCue) + 1;
+        SubtitleItems.Insert(insertIdx, new SubtitleSegmentDto
+        {
+            StartTime = splitPoint,
+            EndTime = origEnd,
+            Text = secondText,
+        });
+        GridSubtitles.Items.Refresh();
+        RebuildVisualTimeline();
+        AppendLog($"Split subtitle cue at {splitPoint:0.00}s into two cues.");
     }
 
     private void BtnRemoveSubtitleRow_Click(object sender, RoutedEventArgs e)
@@ -581,6 +935,7 @@ public partial class MainWindow : Window
         {
             SubtitleItems.RemoveAt(SubtitleItems.Count - 1);
         }
+        RebuildVisualTimeline();
     }
 
     private void BtnBrowseFile_Click(object sender, RoutedEventArgs e)

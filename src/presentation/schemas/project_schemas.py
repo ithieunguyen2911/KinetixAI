@@ -45,8 +45,37 @@ class MixAudioRequest(BaseModel):
     bg_volume: float = Field(default=0.20, ge=0.0, le=1.0)
 
 
+class SpeedChangeRequest(BaseModel):
+    speed_factor: float = Field(default=1.25, ge=0.25, le=4.0)
+
+
+class ColorGradeRequest(BaseModel):
+    preset: str = Field(default="natural")
+    brightness: float = Field(default=0.0, ge=-1.0, le=1.0)
+    contrast: float = Field(default=1.0, ge=0.2, le=3.0)
+    saturation: float = Field(default=1.0, ge=0.0, le=3.0)
+    gamma: float = Field(default=1.0, ge=0.2, le=3.0)
+
+
+class ReframeRequest(BaseModel):
+    aspect_ratio: str = Field(default="16:9", pattern="^(16:9|9:16|1:1)$")
+
+
+class AudioMasterRequest(BaseModel):
+    remove_silence: bool = Field(default=False)
+    normalize_loudness: bool = Field(default=True)
+    mix_bgm: bool = Field(default=False)
+    bgm_source: str = Field(default="demo://bgm")
+    bg_volume: float = Field(default=0.18, ge=0.0, le=1.0)
+
+
+class SnapshotRequest(BaseModel):
+    timestamp_sec: float = Field(default=1.0, ge=0.0)
+
+
 class UpdateSubtitlesRequest(BaseModel):
     engine_type: str | None = Field(default=None, pattern="^(remotion|hyperframes)$")
+    template_id: str | None = Field(default=None)
     subtitles: List[SubtitleSegmentSchema]
 
 

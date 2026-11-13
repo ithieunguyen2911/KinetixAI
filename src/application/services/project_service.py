@@ -92,6 +92,7 @@ class ProjectService:
         project_id: str,
         subtitles: List[SubtitleSegment],
         engine_type: RenderEngineType | str | None = None,
+        template_id: str | None = None,
     ) -> VideoProject:
         """Update subtitles for an existing project, sync word timestamps, and re-render steps 4 and 5."""
         project = self.repository.get(project_id)
@@ -106,6 +107,8 @@ class ProjectService:
                 if isinstance(engine_type, str)
                 else engine_type
             )
+        if template_id:
+            project.template_id = template_id
 
         for seg in subtitles:
             seg.ensure_word_timestamps()
@@ -210,6 +213,121 @@ class ProjectService:
         project.final_output_path = actual_mixed
         project.current_step = f"Audio Mixed (bg volume {int(bg_volume * 100)}%)"
         return self.repository.save(project)
+
+    def change_project_speed(self, project_id: str, speed_factor: float) -> VideoProject:
+        """Change playback speed (0.25x to 4.0x) of a project's active video."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        target = project_dir / f"{project.project_id}_speed.mp4"
+        actual = self.processor.change_speed(project.final_output_path, target, speed_factor)
+        project.final_output_path = actual
+        project.current_step = f"Speed Adjusted ({speed_factor:.2f}x)"
+        return self.repository.save(project)
+
+    def apply_project_color_grade(
+        self,
+        project_id: str,
+        preset: str = "natural",
+        brightness: float = 0.0,
+        contrast: float = 1.0,
+        saturation: float = 1.0,
+        gamma: float = 1.0,
+    ) -> VideoProject:
+        """Apply LUT / Color Look preset and eq parameters to a project's active video."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        target = project_dir / f"{project.project_id}_graded.mp4"
+        actual = self.processor.apply_color_grade(
+            project.final_output_path,
+            target,
+            preset=preset,
+            brightness=brightness,
+            contrast=contrast,
+            saturation=saturation,
+            gamma=gamma,
+        )
+        project.final_output_path = actual
+        project.current_step = f"Color Graded ({preset})"
+        return self.repository.save(project)
+
+    def reframe_project_video(self, project_id: str, aspect_ratio: str = "16:9") -> VideoProject:
+        """Reframe a project's active video into 16:9, 9:16 (vertical Shorts blur-pad), or 1:1."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        safe_tag = aspect_ratio.replace(":", "x")
+        target = project_dir / f"{project.project_id}_{safe_tag}.mp4"
+        actual = self.processor.reframe_aspect_ratio(project.final_output_path, target, aspect_ratio)
+        project.final_output_path = actual
+        project.current_step = f"Reframed ({aspect_ratio})"
+        return self.repository.save(project)
+
+    def master_project_audio(
+        self,
+        project_id: str,
+        remove_silence: bool = False,
+        normalize_loudness: bool = True,
+        mix_bgm: bool = False,
+        bgm_source: str = "demo://bgm",
+        bg_volume: float = 0.18,
+    ) -> VideoProject:
+        """Execute NLE audio post-processing (Silence Cut, EBU R128 Loudness Normalization, BGM Ducking Mix)."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        current_video = project.final_output_path
+        steps_applied: List[str] = []
+
+        if remove_silence:
+            silence_target = project_dir / f"{project.project_id}_desilenced.mp4"
+            current_video = self.processor.remove_silences(current_video, silence_target)
+            steps_applied.append("Silence Cut")
+
+        if normalize_loudness:
+            norm_target = project_dir / f"{project.project_id}_normalized.mp4"
+            current_video = self.processor.normalize_audio(current_video, norm_target)
+            steps_applied.append("EBU R128 Normalized")
+
+        if mix_bgm:
+            bgm_path = (
+                self.downloader.download("demo://bgm", project_dir)
+                if bgm_source.strip().lower() == "demo://bgm"
+                else Path(bgm_source)
+            )
+            mix_target = project_dir / f"{project.project_id}_bgm_mixed.mp4"
+            current_video = self.processor.mix_audio_tracks(
+                current_video,
+                bgm_path,
+                mix_target,
+                bg_volume=bg_volume,
+            )
+            steps_applied.append(f"BGM Mixed ({int(bg_volume * 100)}%)")
+
+        project.final_output_path = current_video
+        summary = " + ".join(steps_applied) if steps_applied else "Audio Inspected"
+        project.current_step = f"Audio Mastered: {summary}"
+        return self.repository.save(project)
+
+    def capture_project_snapshot(self, project_id: str, timestamp_sec: float = 1.0) -> Dict[str, Any]:
+        """Capture a PNG frame snapshot from the project's active video at timestamp_sec."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+        project_dir = self.workspace_root / project.project_id
+        snap_name = f"{project.project_id}_frame_{int(timestamp_sec * 100):05d}.png"
+        snap_path = project_dir / snap_name
+        out_img = self.processor.capture_snapshot(project.final_output_path, timestamp_sec, snap_path)
+        return {
+            "project_id": project.project_id,
+            "timestamp_sec": round(float(timestamp_sec), 3),
+            "snapshot_path": str(out_img),
+        }
 
     def get_project(self, project_id: str) -> VideoProject | None:
         return self.repository.get(project_id)
