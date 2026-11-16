@@ -22,3 +22,12 @@ Rather than inventing ad-hoc patterns, KinetixAI v3.0 synthesizes proven design 
   - **Animations**: `ken_burns_zoom` (`scale=1600:-1,zoompan=z='min(zoom+0.0012,1.18)':d=1:s=1280x720:fps=30`), `neon_glow_pulse` (modulated vignette/eq brightness pulse), `camera_shake_impact` (short crop jitter oscillation), plus overlay-level motion styles in Remotion/HyperFrames (`spring_pop`, `typewriter_reveal`, `slide_up_bounce`).
   - **SFX Layering**: `[1:a]adelay={ms}|{ms},volume={vol}[sfx];[0:a][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]` mixes crisp SFX onto the exact millisecond timestamp without cutting existing narration.
   - **Legacy SMPTE Removal**: Ensure no workspace project retains legacy SMPTE bars `demo_sample_raw.mp4` by switching all synthesis to dark-slate studio canvas (`0x0B0F19`) and purging legacy cached files.
+
+## 3. Reverse Engineering `debpalash/VoiceStudio` (REA Evidence Summary)
+- **Target Inspected**: `https://github.com/debpalash/VoiceStudio` (111,712 GitHub stars, AGPL-3.0, Electron + Python backend powered by `k2-fsa/OmniVoice`, `CosyVoice 3`, `IndexTTS 2.5`, `WhisperX`, `faster-whisper`).
+- **Core Features Mapped into KinetixAI v4.0 Clean Architecture**:
+  1. **Consent-Gated Voice Cloning**: Extracts acoustic traits from clean reference audio while strictly enforcing `consent_verified == True` (refuses cloning without explicit owner permission).
+  2. **Seeded Voice Design**: Deterministic natural-language trait parser (`prompt_description` + `seed`) creating reusable `VoiceProfile` definitions.
+  3. **Expressive Speech Tags & Multi-Genre Podcast/Storytelling**: Supports `[pause]`, `[pause 500ms]`, `[breath]`, `[laughter]`, `[sigh]`, `[emotion:warm|excited|whisper|dramatic|mysterious|calm|late_night]` across 6 genres (`StorytellingGenre`).
+  4. **Time-Aligned Video Dubbing**: Synthesizes translated segments stitched cleanly onto video timeline duration (`replace_audio_track` with automatic `tpad` video extension if narration exceeds base video).
+  5. **Interactive Multi-Track Timeline CRUD**: Clickable `TimelineClip` entities across `V2`, `V1`, `S1`, `A1`, `B1` supporting inline **Add, Edit, Split at Playhead, Clone, Delete, and Ripple MP4 Render** directly inside WPF.

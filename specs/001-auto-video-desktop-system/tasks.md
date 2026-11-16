@@ -143,3 +143,18 @@ description: "Actionable, dependency-ordered task list for KinetixAI (FlowVids-A
 - [X] T056 Purge legacy SMPTE bar `demo_sample_raw.mp4` caches in `workspace/` and regenerate showcase projects with Dark-Slate Broadcast Canvas + Character HUD + BGM
 - [X] T057 Write comprehensive unit & integration tests for all v3.0 features (`tests/unit/test_domain_entities.py`, `tests/unit/test_adapters.py`, `tests/integration/test_fastapi_endpoints.py`, `tests/integration/test_mcp_server.py`)
 - [X] T058 Verify `uv run pytest -v` (100% pass), `dotnet build` (`0 Warning(s), 0 Error(s)`), launch via `.\run_desktop.ps1`, confirm process alive, mark all tasks `[X]`, and push to GitHub
+
+---
+
+## Phase 17: Interactive Multi-Track Timeline Clip CRUD, Multi-Voice Podcast Studio, VoiceStudio (`debpalash/VoiceStudio`) Features & User Guide (`v4.0`)
+
+- [X] T059 [P] Extend `src/domain/entities/enums.py` (`StorytellingGenre`), `src/domain/entities/studio_entities.py` (`TimelineClip`, `VoiceProfile`, `PodcastTurn`), `src/domain/entities/video_project.py` (`ensure_timeline_clips`, `timeline_clips`, `podcast_turns`), and `src/infrastructure/repositories/json_project_repository.py`
+- [X] T060 [P] Extend `IVoiceSynthesizer` (`design_voice`, `clone_voice`, `list_custom_profiles`, `synthesize_podcast_script`) in `src/domain/interfaces/voice_synthesizer.py`
+- [X] T061 [P] Upgrade `WhisperAdapter._align_script_to_duration` in `src/infrastructure/transcribers/whisper_adapter.py` with smart sentence-boundary splitting (`.`, `!`, `?`) for multi-sentence scripts
+- [X] T062 Implement VoiceStudio features (`design_voice`, consent-gated `clone_voice`, Expressive Tags `[pause]`/`[emotion:...]`, multi-voice `synthesize_podcast_script`) in `src/infrastructure/tts/tts_voice_adapter.py` and automatic `tpad` duration extension in `FfmpegAdapter.replace_audio_track`
+- [X] T063 Implement `manage_timeline_clip` (Add/Edit/Split/Clone/Delete/Render), `design_custom_voice`, `clone_custom_voice`, `generate_project_podcast`, and `dub_project_video` in `src/application/services/project_service.py`
+- [X] T064 [P] Expose REST endpoints (`/timeline-clips`, `/podcast`, `/dubbing`, `/voices/design`, `/voices/clone`, `/voices/profiles`) in `src/presentation/api/main.py` and 5 MCP tools (`kinetix_manage_timeline_clip`, `kinetix_produce_podcast`, `kinetix_design_voice`, `kinetix_clone_voice`, `kinetix_dub_video` — total 27 tools) in `src/presentation/mcp/mcp_server.py`
+- [X] T065 Upgrade `desktop_app/KinetixAI.Desktop` (`ApiModels.cs`, `MainWindow.xaml`, `MainWindow.xaml.cs`) with Inline Timeline Clip Quick-Editor Bar (Add/Edit/Split/Clone/Delete/Render across `V2`/`V1`/`S1`/`A1`/`B1`), Top Bar `Hướng Dẫn (User Guide)` launcher, and Tab 5 `PODCAST & VOICESTUDIO AI`
+- [X] T066 Generate & validate Enterprise User Guide (`Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.{docx,html,md}`) in `docs/` using `product-user-guide-generator` CLI
+- [X] T067 Add unit & integration tests for Timeline Clip CRUD, Voice Design, Consent-Gated Voice Cloning, Expressive Tags, Podcast Generation & Auto Dubbing in `tests/`
+- [X] T068 Verify `uv run pytest -v` (100% pass), `dotnet build` (`0 Warning(s), 0 Error(s)`), launch via `.\run_desktop.ps1`, mark all tasks `[X]`, and push v4.0 to GitHub

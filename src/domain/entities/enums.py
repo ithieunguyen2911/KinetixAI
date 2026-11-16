@@ -71,3 +71,14 @@ class AnimationPreset(str, Enum):
     NEON_PULSE = "neon_glow_pulse"
     SLIDE_BOUNCE = "slide_up_bounce"
     CAMERA_SHAKE = "camera_shake_impact"
+
+
+class StorytellingGenre(str, Enum):
+    """Supported multi-voice Podcast & Storytelling narration genres (VoiceStudio-inspired)."""
+
+    PODCAST_DIALOGUE = "podcast_dialogue"
+    LATE_NIGHT_STORY = "late_night_story"
+    THRILLER_MYSTERY = "thriller_mystery"
+    AUDIOBOOK_NARRATION = "audiobook_narration"
+    TECH_EXPLAINER = "tech_explainer"
+    MOTIVATIONAL_EPIC = "motivational_epic"

@@ -135,8 +135,157 @@ public class AuditLogEntryDto
     public string Status { get; set; } = "OK";
 }
 
+public class TimelineClipDto
+{
+    [JsonPropertyName("clip_id")]
+    public string ClipId { get; set; } = string.Empty;
+
+    [JsonPropertyName("track_id")]
+    public string TrackId { get; set; } = "V1";
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = "Clip";
+
+    [JsonPropertyName("start_time")]
+    public double StartTime { get; set; }
+
+    [JsonPropertyName("end_time")]
+    public double EndTime { get; set; } = 2.0;
+
+    [JsonPropertyName("source_start")]
+    public double SourceStart { get; set; }
+
+    [JsonPropertyName("source_end")]
+    public double SourceEnd { get; set; } = 2.0;
+
+    [JsonPropertyName("speed")]
+    public double Speed { get; set; } = 1.0;
+
+    [JsonPropertyName("volume")]
+    public double Volume { get; set; } = 1.0;
+
+    [JsonPropertyName("transition_in")]
+    public string TransitionIn { get; set; } = "none";
+}
+
+public class ManageTimelineClipRequestDto
+{
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = "add";
+
+    [JsonPropertyName("clip_id")]
+    public string? ClipId { get; set; }
+
+    [JsonPropertyName("split_time")]
+    public double? SplitTime { get; set; }
+
+    [JsonPropertyName("render_timeline")]
+    public bool RenderTimeline { get; set; }
+
+    [JsonPropertyName("clip")]
+    public TimelineClipDto? Clip { get; set; }
+}
+
+public class PodcastTurnDto
+{
+    [JsonPropertyName("turn_id")]
+    public string TurnId { get; set; } = string.Empty;
+
+    [JsonPropertyName("speaker_name")]
+    public string SpeakerName { get; set; } = "Host";
+
+    [JsonPropertyName("voice_id")]
+    public string VoiceId { get; set; } = "vi-VN-HoaiMyNeural";
+
+    [JsonPropertyName("emotion")]
+    public string Emotion { get; set; } = "warm";
+
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
+
+    [JsonPropertyName("pause_after_ms")]
+    public int PauseAfterMs { get; set; } = 350;
+}
+
+public class PodcastRequestDto
+{
+    [JsonPropertyName("raw_content")]
+    public string RawContent { get; set; } = string.Empty;
+
+    [JsonPropertyName("genre")]
+    public string Genre { get; set; } = "podcast_dialogue";
+
+    [JsonPropertyName("host_voice_id")]
+    public string HostVoiceId { get; set; } = "vi-VN-HoaiMyNeural";
+
+    [JsonPropertyName("guest_voice_id")]
+    public string GuestVoiceId { get; set; } = "vi-VN-NamMinhNeural";
+
+    [JsonPropertyName("bgm_volume")]
+    public double BgmVolume { get; set; } = 0.14;
+}
+
+public class VoiceDesignRequestDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("prompt_description")]
+    public string PromptDescription { get; set; } = string.Empty;
+
+    [JsonPropertyName("seed")]
+    public int Seed { get; set; } = 42;
+
+    [JsonPropertyName("language")]
+    public string Language { get; set; } = "vi-VN";
+}
+
+public class VoiceCloneRequestDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("reference_audio_path")]
+    public string ReferenceAudioPath { get; set; } = string.Empty;
+
+    [JsonPropertyName("consent_verified")]
+    public bool ConsentVerified { get; set; }
+
+    [JsonPropertyName("language")]
+    public string Language { get; set; } = "vi-VN";
+}
+
+public class VoiceProfileDto
+{
+    [JsonPropertyName("voice_id")]
+    public string VoiceId { get; set; } = string.Empty;
+
+    [JsonPropertyName("profile_id")]
+    public string ProfileId { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("mode")]
+    public string Mode { get; set; } = "builtin";
+}
+
+public class DubbingRequestDto
+{
+    [JsonPropertyName("target_language")]
+    public string TargetLanguage { get; set; } = "vi-VN";
+
+    [JsonPropertyName("voice_id")]
+    public string VoiceId { get; set; } = "vi-VN-HoaiMyNeural";
+
+    [JsonPropertyName("translated_lines")]
+    public List<string>? TranslatedLines { get; set; }
+}
+
 public class TimelineClipBlockVm
 {
+    public string ClipId { get; set; } = string.Empty;
+    public string TrackId { get; set; } = "V1";
     public string Label { get; set; } = string.Empty;
     public double StartTime { get; set; }
     public double EndTime { get; set; }
@@ -144,6 +293,7 @@ public class TimelineClipBlockVm
     public double WidthPx { get; set; }
     public string BackgroundHex { get; set; } = "#1E3A8A";
     public string BorderHex { get; set; } = "#3B82F6";
+    public string BorderThicknessStr { get; set; } = "1";
 }
 
 public class CreateProjectRequestDto
@@ -453,6 +603,12 @@ public class ProjectResponseDto
 
     [JsonPropertyName("scenes")]
     public List<StorySceneDto> Scenes { get; set; } = new();
+
+    [JsonPropertyName("timeline_clips")]
+    public List<TimelineClipDto> TimelineClips { get; set; } = new();
+
+    [JsonPropertyName("podcast_turns")]
+    public List<PodcastTurnDto> PodcastTurns { get; set; } = new();
 
     [JsonPropertyName("audit_logs")]
     public List<AuditLogEntryDto> AuditLogs { get; set; } = new();

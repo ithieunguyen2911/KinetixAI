@@ -194,6 +194,52 @@ def test_fastapi_health_and_project_lifecycle(tmp_path: Path) -> None:
     assert clone_res.status_code == 200
     assert clone_res.json()["project_id"] == "api_test_01_cloned"
 
+    # 7d. v4.0 Interactive Timeline Clip CRUD (Add / Update / Split / Clone / Delete / Render)
+    add_clip = client.post(
+        "/api/v1/projects/api_test_01/timeline-clips",
+        json={"action": "add", "clip": {"track_id": "S1", "label": "Added Caption Clip", "start_time": 0.0, "end_time": 1.8}},
+    )
+    assert add_clip.status_code == 200
+    added_id = add_clip.json()["timeline_clips"][-1]["clip_id"]
+
+    split_clip = client.post(
+        "/api/v1/projects/api_test_01/timeline-clips",
+        json={"action": "split", "clip_id": added_id, "split_time": 0.9},
+    )
+    assert split_clip.status_code == 200
+
+    clone_clip = client.post(
+        "/api/v1/projects/api_test_01/timeline-clips",
+        json={"action": "clone", "clip_id": added_id},
+    )
+    assert clone_clip.status_code == 200
+
+    # 7e. VoiceStudio Voice Design, Podcast Generation & Auto Dubbing
+    vd_res = client.post(
+        "/api/v1/voices/design",
+        json={"name": "TechStoryVoice", "prompt_description": "Giọng nam trầm ấm kể chuyện công nghệ", "seed": 12},
+    )
+    assert vd_res.status_code == 200
+    assert vd_res.json()["mode"] == "designed"
+
+    pod_res = client.post(
+        "/api/v1/projects/api_test_01/podcast",
+        json={
+            "raw_content": "Host: Câu mở đầu podcast.|Guest: Phần trả lời đầy cảm hứng.",
+            "genre": "podcast_dialogue",
+            "host_voice_id": "win-sapi-studio",
+            "guest_voice_id": "win-sapi-studio",
+        },
+    )
+    assert pod_res.status_code == 200
+    assert len(pod_res.json()["podcast_turns"]) == 2
+
+    dub_res = client.post(
+        "/api/v1/projects/api_test_01/dubbing",
+        json={"target_language": "en-US", "voice_id": "win-sapi-studio", "translated_lines": ["Hello World"]},
+    )
+    assert dub_res.status_code == 200
+
     del_res = client.delete("/api/v1/projects/api_test_01_cloned")
     assert del_res.status_code == 200 and del_res.json()["deleted"] is True
 

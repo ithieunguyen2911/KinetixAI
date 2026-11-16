@@ -168,3 +168,154 @@ class AuditLogEntry:
             "details": self.details,
             "status": self.status,
         }
+
+
+@dataclass
+class TimelineClip:
+    """Interactive Multi-Track NLE Timeline clip block supporting Add, Edit, Split, Clone, and Delete."""
+
+    clip_id: str
+    track_id: str = "V1"
+    label: str = "Clip"
+    start_time: float = 0.0
+    end_time: float = 2.0
+    source_start: float = 0.0
+    source_end: float = 2.0
+    speed: float = 1.0
+    volume: float = 1.0
+    transition_in: str = "none"
+
+    def __post_init__(self) -> None:
+        self.clip_id = self.clip_id.strip() or f"clip_{uuid.uuid4().hex[:6]}"
+        self.track_id = self.track_id.strip().upper() or "V1"
+        self.label = self.label.strip() or f"{self.track_id} Clip"
+        self.start_time = max(0.0, float(self.start_time))
+        self.end_time = max(self.start_time + 0.1, float(self.end_time))
+        self.source_start = max(0.0, float(self.source_start))
+        self.source_end = max(self.source_start + 0.1, float(self.source_end))
+        self.speed = max(0.25, min(4.0, float(self.speed)))
+        self.volume = max(0.0, min(2.0, float(self.volume)))
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TimelineClip":
+        st = float(data.get("start_time") or 0.0)
+        en = float(data.get("end_time") or (st + 2.0))
+        return cls(
+            clip_id=str(data.get("clip_id") or f"clip_{uuid.uuid4().hex[:6]}"),
+            track_id=str(data.get("track_id") or "V1"),
+            label=str(data.get("label") or "Clip"),
+            start_time=st,
+            end_time=en,
+            source_start=float(data.get("source_start") if data.get("source_start") is not None else st),
+            source_end=float(data.get("source_end") if data.get("source_end") is not None else en),
+            speed=float(data.get("speed") or 1.0),
+            volume=float(data.get("volume") if data.get("volume") is not None else 1.0),
+            transition_in=str(data.get("transition_in") or "none"),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "clip_id": self.clip_id,
+            "track_id": self.track_id,
+            "label": self.label,
+            "start_time": round(self.start_time, 3),
+            "end_time": round(self.end_time, 3),
+            "source_start": round(self.source_start, 3),
+            "source_end": round(self.source_end, 3),
+            "speed": round(self.speed, 2),
+            "volume": round(self.volume, 2),
+            "transition_in": self.transition_in,
+        }
+
+
+@dataclass
+class VoiceProfile:
+    """Reusable VoiceStudio AI Voice Cloning & Seeded Voice Design profile."""
+
+    profile_id: str
+    name: str
+    mode: str = "designed"  # builtin | designed | cloned
+    base_voice_id: str = "vi-VN-HoaiMyNeural"
+    prompt_description: str = ""
+    seed: int = 42
+    pitch_hz: int = 0
+    rate: float = 1.0
+    warmth_eq: float = 0.0
+    emotion_style: str = "warm"
+    reference_audio_path: str | None = None
+    consent_verified: bool = True
+
+    def __post_init__(self) -> None:
+        self.profile_id = self.profile_id.strip() or f"vp_{uuid.uuid4().hex[:6]}"
+        self.name = self.name.strip() or "Custom Studio Voice"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VoiceProfile":
+        return cls(
+            profile_id=str(data.get("profile_id") or f"vp_{uuid.uuid4().hex[:6]}"),
+            name=str(data.get("name") or "Custom Studio Voice"),
+            mode=str(data.get("mode") or "designed"),
+            base_voice_id=str(data.get("base_voice_id") or "vi-VN-HoaiMyNeural"),
+            prompt_description=str(data.get("prompt_description") or ""),
+            seed=int(data.get("seed") or 42),
+            pitch_hz=int(data.get("pitch_hz") or 0),
+            rate=float(data.get("rate") or 1.0),
+            warmth_eq=float(data.get("warmth_eq") or 0.0),
+            emotion_style=str(data.get("emotion_style") or "warm"),
+            reference_audio_path=data.get("reference_audio_path"),
+            consent_verified=bool(data.get("consent_verified", True)),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "profile_id": self.profile_id,
+            "name": self.name,
+            "mode": self.mode,
+            "base_voice_id": self.base_voice_id,
+            "prompt_description": self.prompt_description,
+            "seed": self.seed,
+            "pitch_hz": self.pitch_hz,
+            "rate": round(self.rate, 2),
+            "warmth_eq": round(self.warmth_eq, 2),
+            "emotion_style": self.emotion_style,
+            "reference_audio_path": self.reference_audio_path,
+            "consent_verified": self.consent_verified,
+        }
+
+
+@dataclass
+class PodcastTurn:
+    """Single conversational / storytelling turn in a multi-voice Podcast or Audiobook."""
+
+    turn_id: str
+    speaker_name: str
+    voice_id: str = "vi-VN-HoaiMyNeural"
+    emotion: str = "warm"
+    text: str = ""
+    pause_after_ms: int = 350
+
+    def __post_init__(self) -> None:
+        self.turn_id = self.turn_id.strip() or f"turn_{uuid.uuid4().hex[:5]}"
+        self.speaker_name = self.speaker_name.strip() or "Host"
+        self.text = self.text.strip()
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PodcastTurn":
+        return cls(
+            turn_id=str(data.get("turn_id") or f"turn_{uuid.uuid4().hex[:5]}"),
+            speaker_name=str(data.get("speaker_name") or "Host"),
+            voice_id=str(data.get("voice_id") or "vi-VN-HoaiMyNeural"),
+            emotion=str(data.get("emotion") or "warm"),
+            text=str(data.get("text") or ""),
+            pause_after_ms=int(data.get("pause_after_ms") or 350),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "turn_id": self.turn_id,
+            "speaker_name": self.speaker_name,
+            "voice_id": self.voice_id,
+            "emotion": self.emotion,
+            "text": self.text,
+            "pause_after_ms": self.pause_after_ms,
+        }

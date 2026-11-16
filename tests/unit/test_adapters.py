@@ -216,3 +216,32 @@ def test_v3_tts_audio_library_beats_sfx_and_fx_motion(tmp_path: Path) -> None:
     assert beat_video.exists()
     assert len(beats) >= 6
     assert (tmp_path / "beat.beats.json").exists()
+
+    # 3. VoiceStudio v4.0: Voice Design, Consent-Gated Voice Cloning, Expressive Tags & Multi-Sentence Split
+    transcriber = WhisperAdapter()
+    segs = transcriber._align_script_to_duration("Xin chào, tôi là AI. Và tôi sẽ thay đổi cuộc sống.", 6.0)
+    assert len(segs) == 2
+
+    tts_isolated = TtsVoiceAdapter(profiles_file=tmp_path / "voice_profiles.json")
+    designed = tts_isolated.design_voice(name="LateNightNarrator", prompt_description="Giọng nam trầm ấm kể chuyện đêm khuya", seed=77)
+    assert designed["mode"] == "designed"
+    assert designed["base_voice_id"] == "vi-VN-NamMinhNeural"
+
+    with pytest.raises(ValueError, match="consent"):
+        tts_isolated.clone_voice(name="NoConsent", reference_audio_path=voice_wav, consent_verified=False)
+
+    cloned = tts_isolated.clone_voice(name="ApprovedHost", reference_audio_path=voice_wav, consent_verified=True)
+    assert cloned["mode"] == "cloned"
+    assert cloned["consent_verified"] is True
+
+    podcast_wav, timed_turns = tts_isolated.synthesize_podcast_script(
+        turns=[
+            {"speaker_name": "Host", "voice_id": "win-sapi-studio", "emotion": "warm", "text": "Chào mừng đến với Podcast Kinetix [pause 300ms]"},
+            {"speaker_name": "Guest", "voice_id": designed["profile_id"], "emotion": "excited", "text": "Rất vui được đồng hành hôm nay!"},
+        ],
+        output_path=tmp_path / "podcast_stitched.wav",
+        genre="podcast_dialogue",
+    )
+    assert podcast_wav.exists() and podcast_wav.stat().st_size > 2000
+    assert len(timed_turns) == 2
+    assert timed_turns[1]["start_time"] > 0.0

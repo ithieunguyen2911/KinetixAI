@@ -166,6 +166,64 @@ class ConcatClipsRequest(BaseModel):
     transition: str = Field(default="none")
 
 
+class TimelineClipSchema(BaseModel):
+    clip_id: str = ""
+    track_id: str = "V1"
+    label: str = "Clip"
+    start_time: float = Field(default=0.0, ge=0.0)
+    end_time: float = Field(default=2.0, gt=0.0)
+    source_start: float = Field(default=0.0, ge=0.0)
+    source_end: float = Field(default=2.0, gt=0.0)
+    speed: float = Field(default=1.0, ge=0.25, le=4.0)
+    volume: float = Field(default=1.0, ge=0.0, le=2.0)
+    transition_in: str = "none"
+
+
+class ManageTimelineClipRequest(BaseModel):
+    action: str = Field(default="add", pattern="^(add|update|split|clone|delete|render)$")
+    clip_id: str | None = None
+    split_time: float | None = None
+    render_timeline: bool = False
+    clip: TimelineClipSchema | None = None
+
+
+class PodcastTurnSchema(BaseModel):
+    turn_id: str = ""
+    speaker_name: str = "Host"
+    voice_id: str = "vi-VN-HoaiMyNeural"
+    emotion: str = "warm"
+    text: str = ""
+    pause_after_ms: int = 350
+
+
+class PodcastRequest(BaseModel):
+    raw_content: str = Field(min_length=1)
+    genre: str = Field(default="podcast_dialogue")
+    host_voice_id: str = Field(default="vi-VN-HoaiMyNeural")
+    guest_voice_id: str = Field(default="vi-VN-NamMinhNeural")
+    bgm_volume: float = Field(default=0.14, ge=0.0, le=0.8)
+
+
+class VoiceDesignRequest(BaseModel):
+    name: str = Field(min_length=1)
+    prompt_description: str = Field(min_length=2)
+    seed: int = 42
+    language: str = "vi-VN"
+
+
+class VoiceCloneRequest(BaseModel):
+    name: str = Field(min_length=1)
+    reference_audio_path: str = Field(min_length=1)
+    consent_verified: bool = False
+    language: str = "vi-VN"
+
+
+class DubbingRequest(BaseModel):
+    target_language: str = "vi-VN"
+    voice_id: str = "vi-VN-HoaiMyNeural"
+    translated_lines: List[str] | None = None
+
+
 class UpdateSubtitlesRequest(BaseModel):
     engine_type: str | None = Field(default=None, pattern="^(remotion|hyperframes)$")
     template_id: str | None = Field(default=None)
@@ -195,6 +253,8 @@ class ProjectResponse(BaseModel):
     scene_context: SceneContextSchema = Field(default_factory=SceneContextSchema)
     characters: List[CharacterProfileSchema] = Field(default_factory=list)
     scenes: List[StorySceneSchema] = Field(default_factory=list)
+    timeline_clips: List[TimelineClipSchema] = Field(default_factory=list)
+    podcast_turns: List[PodcastTurnSchema] = Field(default_factory=list)
     audit_logs: List[AuditLogEntrySchema] = Field(default_factory=list)
 
 

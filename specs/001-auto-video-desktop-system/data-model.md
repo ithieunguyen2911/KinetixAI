@@ -58,4 +58,13 @@
 | `status` | `str` | `"OK"` | `OK`, `WARN`, `ERROR` |
 
 ### Extended `VideoProject` Aggregate Root (`src/domain/entities/video_project.py`)
-Adds `animation_preset`, `transition_preset`, `voice_id`, `bgm_preset`, `beat_timestamps`, `scene_context: SceneContext`, `characters: List[CharacterProfile]`, `scenes: List[StoryScene]`, `audit_logs: List[AuditLogEntry]`, and `append_log(...)`.
+Adds `animation_preset`, `transition_preset`, `voice_id`, `bgm_preset`, `beat_timestamps`, `scene_context: SceneContext`, `characters: List[CharacterProfile]`, `scenes: List[StoryScene]`, `timeline_clips: List[TimelineClip]`, `podcast_turns: List[PodcastTurn]`, `audit_logs: List[AuditLogEntry]`, `ensure_timeline_clips()`, and `append_log(...)`.
+
+---
+
+## 3. v4.0 Podcast, VoiceStudio & Interactive Timeline Entities
+
+- **`StorytellingGenre` (`src/domain/entities/enums.py`)**: `podcast_dialogue`, `late_night_story`, `thriller_mystery`, `audiobook_narration`, `tech_explainer`, `motivational_epic`.
+- **`TimelineClip`**: `{clip_id, track_id ("V2"|"V1"|"S1"|"A1"|"B1"), label, start_time, end_time, source_start, source_end, speed, volume, transition_in}`.
+- **`VoiceProfile`**: `{profile_id, name, mode ("builtin"|"designed"|"cloned"), base_voice_id, prompt_description, seed, pitch_hz, rate, warmth_eq, emotion_style, reference_audio_path, consent_verified}`.
+- **`PodcastTurn`**: `{turn_id, speaker_name, voice_id, emotion, text, pause_after_ms}`.

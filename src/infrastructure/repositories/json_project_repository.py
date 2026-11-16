@@ -8,8 +8,10 @@ from src.domain.entities.enums import JobStatus, RenderEngineType
 from src.domain.entities.studio_entities import (
     AuditLogEntry,
     CharacterProfile,
+    PodcastTurn,
     SceneContext,
     StoryScene,
+    TimelineClip,
 )
 from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.domain.entities.video_project import VideoProject
@@ -79,6 +81,8 @@ class JsonProjectRepository:
             )
         characters = [CharacterProfile.from_dict(c) for c in data.get("characters", [])]
         scenes = [StoryScene.from_dict(sc) for sc in data.get("scenes", [])]
+        timeline_clips = [TimelineClip.from_dict(tc) for tc in data.get("timeline_clips", [])]
+        podcast_turns = [PodcastTurn.from_dict(pt) for pt in data.get("podcast_turns", [])]
         audit_logs = [AuditLogEntry.from_dict(a) for a in data.get("audit_logs", [])]
         scene_context = SceneContext.from_dict(data.get("scene_context"))
 
@@ -105,5 +109,7 @@ class JsonProjectRepository:
             scene_context=scene_context,
             characters=characters,
             scenes=scenes,
+            timeline_clips=timeline_clips,
+            podcast_turns=podcast_turns,
             audit_logs=audit_logs,
         )

@@ -12,12 +12,15 @@ from src.domain.entities.enums import (
     AnimationPreset,
     JobStatus,
     RenderEngineType,
+    StorytellingGenre,
     TransitionPreset,
 )
 from src.domain.entities.studio_entities import (
     CharacterProfile,
+    PodcastTurn,
     SceneContext,
     StoryScene,
+    TimelineClip,
 )
 from src.domain.entities.subtitle_segment import SubtitleSegment
 from src.domain.entities.video_project import VideoProject
@@ -485,23 +488,32 @@ class ProjectService:
         }
 
     def get_project(self, project_id: str) -> VideoProject | None:
-        return self.repository.get(project_id)
+        proj = self.repository.get(project_id)
+        if proj and not proj.timeline_clips:
+            proj.ensure_timeline_clips(max(6.0, proj.subtitles[-1].end_time if proj.subtitles else 6.0))
+        return proj
 
     def list_projects(self) -> List[VideoProject]:
-        return self.repository.list_all()
+        items = self.repository.list_all()
+        for proj in items:
+            if not proj.timeline_clips:
+                proj.ensure_timeline_clips(max(6.0, proj.subtitles[-1].end_time if proj.subtitles else 6.0))
+        return items
 
     # ==========================================================
     # v3.0 STUDIO CRUD, CLONE, CONTEXT, CHARACTER, AUDIO & BEAT
     # ==========================================================
 
     def get_studio_catalog(self) -> Dict[str, Any]:
-        """Return all curated voices, BGM beds, SFX cues, transitions, and animations."""
+        """Return all curated voices, custom cloned/designed voices, BGM, SFX, genres, transitions & animations."""
         return {
             "voices": self.voice_synthesizer.list_voices(),
+            "custom_profiles": self.voice_synthesizer.list_custom_profiles(),
             "bgm_presets": self.audio_library.list_bgm_presets(),
             "sfx_presets": self.audio_library.list_sfx_presets(),
             "transitions": [t.value for t in TransitionPreset],
             "animations": [a.value for a in AnimationPreset],
+            "storytelling_genres": [g.value for g in StorytellingGenre],
         }
 
     def clone_project(self, project_id: str, new_project_id: str | None = None) -> VideoProject:
@@ -823,4 +835,404 @@ class ProjectService:
             "Auto Beat-Cut",
             f"Generated {len(beats)} beat markers at {bpm} BPM (align_subtitles={align_subtitles}).",
         )
+        return self.repository.save(project)
+
+    # ==========================================================
+    # v4.0 INTERACTIVE TIMELINE CLIP CRUD, PODCAST & VOICESTUDIO
+    # ==========================================================
+
+    def manage_timeline_clip(
+        self,
+        project_id: str,
+        action: str,
+        clip_data: Dict[str, Any] | None = None,
+        clip_id: str | None = None,
+        split_time: float | None = None,
+        render_timeline: bool = False,
+    ) -> VideoProject:
+        """Full Add / Edit / Split / Clone / Delete CRUD on interactive Multi-Track Timeline clips + Video Render."""
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+
+        raw_dur = 6.0
+        target_probe = project.final_output_path or project.raw_video_path
+        if target_probe and target_probe.exists():
+            raw_dur = float(self.processor.probe_media(target_probe).get("duration_seconds") or 6.0)
+        project.ensure_timeline_clips(raw_dur)
+
+        act = action.strip().lower()
+        touched_track = "S1"
+
+        if act == "add" and clip_data:
+            new_clip = TimelineClip.from_dict(clip_data)
+            project.timeline_clips.append(new_clip)
+            touched_track = new_clip.track_id
+            project.append_log("TIMELINE", "Add Clip", f"Added [{new_clip.track_id}] '{new_clip.label}' ({new_clip.start_time:.2f}s..{new_clip.end_time:.2f}s).")
+        elif act == "update" and clip_data:
+            cid = clip_id or str(clip_data.get("clip_id") or "")
+            existing = next((c for c in project.timeline_clips if c.clip_id == cid), None)
+            if not existing:
+                raise KeyError(f"Timeline clip '{cid}' not found.")
+            existing.track_id = str(clip_data.get("track_id") or existing.track_id).upper()
+            existing.label = str(clip_data.get("label") or existing.label).strip() or existing.label
+            existing.start_time = max(0.0, float(clip_data.get("start_time") if clip_data.get("start_time") is not None else existing.start_time))
+            existing.end_time = max(existing.start_time + 0.1, float(clip_data.get("end_time") if clip_data.get("end_time") is not None else existing.end_time))
+            if clip_data.get("source_start") is not None:
+                existing.source_start = max(0.0, float(clip_data["source_start"]))
+            else:
+                existing.source_start = existing.start_time
+            if clip_data.get("source_end") is not None:
+                existing.source_end = max(existing.source_start + 0.1, float(clip_data["source_end"]))
+            else:
+                existing.source_end = existing.end_time
+            touched_track = existing.track_id
+            project.append_log("TIMELINE", "Edit Clip", f"Updated '{cid}' -> [{existing.track_id}] {existing.start_time:.2f}s..{existing.end_time:.2f}s.")
+        elif act == "split":
+            t_split = float(split_time or 0.0)
+            target = next((c for c in project.timeline_clips if c.clip_id == clip_id), None) if clip_id else None
+            if target is None:
+                target = next((c for c in project.timeline_clips if c.track_id == "V1" and c.start_time + 0.15 < t_split < c.end_time - 0.15), None)
+            if not target:
+                raise KeyError("No timeline clip spans the requested split time.")
+            if not (target.start_time + 0.12 < t_split < target.end_time - 0.12):
+                t_split = round((target.start_time + target.end_time) / 2.0, 3)
+
+            orig_end = target.end_time
+            orig_src_end = target.source_end
+            mid_src = target.source_start + (t_split - target.start_time)
+            target.end_time = round(t_split, 3)
+            target.source_end = round(min(orig_src_end, mid_src), 3)
+
+            words = target.label.split(" ")
+            part1_label = " ".join(words[: max(1, len(words) // 2)]) if target.track_id == "S1" and len(words) > 1 else f"{target.label} (A)"
+            part2_label = " ".join(words[max(1, len(words) // 2) :]) if target.track_id == "S1" and len(words) > 1 else f"{target.label} (B)"
+            if target.track_id == "S1":
+                target.label = part1_label
+
+            second_clip = TimelineClip(
+                clip_id=f"{target.clip_id}_p2_{uuid.uuid4().hex[:3]}",
+                track_id=target.track_id,
+                label=part2_label,
+                start_time=round(t_split, 3),
+                end_time=round(orig_end, 3),
+                source_start=round(mid_src, 3),
+                source_end=round(orig_src_end, 3),
+                speed=target.speed,
+                volume=target.volume,
+                transition_in=target.transition_in,
+            )
+            idx = project.timeline_clips.index(target) + 1
+            project.timeline_clips.insert(idx, second_clip)
+            touched_track = target.track_id
+            project.append_log("TIMELINE", "Split Clip", f"Split '{target.clip_id}' at {t_split:.2f}s -> '{second_clip.clip_id}'.")
+        elif act == "clone":
+            target = next((c for c in project.timeline_clips if c.clip_id == clip_id), None)
+            if not target:
+                raise KeyError(f"Timeline clip '{clip_id}' not found.")
+            dur = max(0.3, target.end_time - target.start_time)
+            copy_clip = TimelineClip(
+                clip_id=f"{target.clip_id}_copy_{uuid.uuid4().hex[:3]}",
+                track_id=target.track_id,
+                label=f"{target.label} (Copy)" if target.track_id != "S1" else target.label,
+                start_time=round(target.end_time, 3),
+                end_time=round(target.end_time + dur, 3),
+                source_start=target.source_start,
+                source_end=target.source_end,
+                speed=target.speed,
+                volume=target.volume,
+                transition_in=target.transition_in,
+            )
+            project.timeline_clips.append(copy_clip)
+            touched_track = target.track_id
+            project.append_log("TIMELINE", "Clone Clip", f"Cloned '{clip_id}' -> '{copy_clip.clip_id}'.")
+        elif act == "delete":
+            target = next((c for c in project.timeline_clips if c.clip_id == clip_id), None)
+            if target:
+                touched_track = target.track_id
+            project.timeline_clips = [c for c in project.timeline_clips if c.clip_id != clip_id]
+            project.append_log("TIMELINE", "Delete Clip", f"Deleted timeline clip '{clip_id}'.")
+
+        # Always keep S1 subtitle clips synced with project.subtitles
+        s1_clips = sorted([c for c in project.timeline_clips if c.track_id == "S1"], key=lambda c: c.start_time)
+        if touched_track == "S1" or s1_clips:
+            synced_subs: List[SubtitleSegment] = []
+            for sc in s1_clips:
+                seg = SubtitleSegment(start_time=sc.start_time, end_time=sc.end_time, text=sc.label)
+                seg.ensure_word_timestamps()
+                synced_subs.append(seg)
+            project.subtitles = synced_subs
+
+        if (render_timeline or act == "render") and project.raw_video_path and project.raw_video_path.exists():
+            project_dir = self.workspace_root / project.project_id
+            v1_clips = sorted([c for c in project.timeline_clips if c.track_id == "V1"], key=lambda c: c.start_time)
+            base_video = project.raw_video_path
+
+            if v1_clips:
+                cut_dir = project_dir / "timeline_cuts"
+                cut_dir.mkdir(parents=True, exist_ok=True)
+                trimmed_parts: List[Path] = []
+                for idx, vc in enumerate(v1_clips, start=1):
+                    part_out = cut_dir / f"part_{idx:02d}.mp4"
+                    s_in = max(0.0, vc.source_start)
+                    s_out = max(s_in + 0.25, vc.source_end)
+                    actual_part = self.processor.trim_video(project.raw_video_path, part_out, s_in, s_out)
+                    trimmed_parts.append(actual_part)
+
+                if len(trimmed_parts) == 1:
+                    base_video = trimmed_parts[0]
+                elif len(trimmed_parts) > 1:
+                    assembled = project_dir / f"{project.project_id}_timeline_base.mp4"
+                    base_video = self.processor.concat_clips(trimmed_parts, assembled, transition="none")
+
+            base_dur = float(self.processor.probe_media(base_video).get("duration_seconds") or 6.0)
+            renderer = RendererFactory.get_renderer(project.engine_type)
+            overlay_target = project_dir / f"{project.project_id}_overlay.mp4"
+            props = {
+                "project_id": project.project_id,
+                "engine": project.engine_type.value,
+                "animation_preset": project.animation_preset,
+                "scene_context": project.scene_context.to_dict(),
+                "characters": [c.to_dict() for c in project.characters],
+                "duration_seconds": base_dur,
+                "subtitles": [s.to_dict() for s in project.subtitles],
+            }
+            project.overlay_video_path = renderer.render_composition(project.template_id, props, overlay_target)
+            final_target = project_dir / f"{project.project_id}_final.mp4"
+            project.final_output_path = self.processor.merge_and_export(
+                base_video,
+                project.overlay_video_path,
+                final_target,
+                subtitles=project.subtitles,
+            )
+            project.append_log("TIMELINE", "Render Timeline", f"Rendered {len(v1_clips)} V1 clips + {len(project.subtitles)} S1 cues -> {project.final_output_path.name}.")
+
+        project.current_step = f"Timeline Updated ({len(project.timeline_clips)} clips)"
+        return self.repository.save(project)
+
+    def design_custom_voice(
+        self,
+        name: str,
+        prompt_description: str,
+        seed: int = 42,
+        language: str = "vi-VN",
+    ) -> Dict[str, Any]:
+        """Create and persist a synthetic VoiceProfile using natural-language Voice Design (VoiceStudio)."""
+        return self.voice_synthesizer.design_voice(
+            name=name,
+            prompt_description=prompt_description,
+            seed=seed,
+            language=language,
+        )
+
+    def clone_custom_voice(
+        self,
+        name: str,
+        reference_audio_path: str,
+        consent_verified: bool = False,
+        language: str = "vi-VN",
+    ) -> Dict[str, Any]:
+        """Clone a voice from a reference audio file after verifying explicit consent (VoiceStudio policy)."""
+        return self.voice_synthesizer.clone_voice(
+            name=name,
+            reference_audio_path=Path(reference_audio_path),
+            consent_verified=consent_verified,
+            language=language,
+        )
+
+    def generate_project_podcast(
+        self,
+        project_id: str,
+        raw_content: str,
+        genre: str = "podcast_dialogue",
+        host_voice_id: str = "vi-VN-HoaiMyNeural",
+        guest_voice_id: str = "vi-VN-NamMinhNeural",
+        bgm_volume: float = 0.14,
+    ) -> VideoProject:
+        """Transform user text/story into a multi-voice expressive Podcast/Audiobook & render full MP4."""
+        import re
+
+        project = self.repository.get(project_id)
+        if not project:
+            # Auto-create a showcase workspace project if project_id does not yet exist
+            project = self.create_and_run_project(
+                project_id=project_id,
+                source_url="demo://sample",
+                engine_type="hyperframes",
+                template_id="KineticTitleCard",
+                script_text="Kinetix Podcast Studio",
+            )
+
+        clean_input = raw_content.strip()
+        if not clean_input:
+            raise ValueError("Podcast content must not be empty.")
+
+        # Split user input by newline / '|' / sentence boundaries into coherent turns
+        raw_lines = [p.strip() for ln in clean_input.splitlines() for p in ln.split("|") if p.strip()]
+        if len(raw_lines) == 1:
+            sentence_parts = [s.strip() for s in re.split(r"(?<=[.!?।])\s+", raw_lines[0]) if s.strip()]
+            if len(sentence_parts) > 1:
+                raw_lines = sentence_parts
+
+        genre_map = {
+            "podcast_dialogue": {"emotion": "warm", "bgm": "bgm_lofi_chill", "pause": 350, "two_speakers": True},
+            "late_night_story": {"emotion": "late_night", "bgm": "bgm_ambient_pad", "pause": 550, "two_speakers": False},
+            "thriller_mystery": {"emotion": "mysterious", "bgm": "bgm_dramatic_rise", "pause": 480, "two_speakers": False},
+            "audiobook_narration": {"emotion": "calm", "bgm": "bgm_ambient_pad", "pause": 420, "two_speakers": False},
+            "tech_explainer": {"emotion": "excited", "bgm": "bgm_cyber_pulse", "pause": 300, "two_speakers": True},
+            "motivational_epic": {"emotion": "dramatic", "bgm": "bgm_dramatic_rise", "pause": 400, "two_speakers": False},
+        }
+        cfg = genre_map.get(genre.strip().lower(), genre_map["podcast_dialogue"])
+
+        turns: List[PodcastTurn] = []
+        for idx, line in enumerate(raw_lines):
+            if ":" in line and len(line.split(":", 1)[0]) <= 24:
+                spk_raw, body = line.split(":", 1)
+                spk_name = spk_raw.strip()
+                voice = guest_voice_id if (idx % 2 == 1 and cfg["two_speakers"]) else host_voice_id
+                text_body = body.strip()
+            else:
+                use_guest = bool(cfg["two_speakers"] and idx % 2 == 1)
+                spk_name = "Guest" if use_guest else "Host"
+                voice = guest_voice_id if use_guest else host_voice_id
+                text_body = line
+            turns.append(
+                PodcastTurn(
+                    turn_id=f"turn_{idx + 1:02d}",
+                    speaker_name=spk_name,
+                    voice_id=voice,
+                    emotion=str(cfg["emotion"]),
+                    text=text_body,
+                    pause_after_ms=int(cfg["pause"]),
+                )
+            )
+
+        project_dir = self.workspace_root / project.project_id
+        podcast_wav = project_dir / "assets" / "audio" / f"{project.project_id}_podcast.wav"
+        stitched_wav, timed_segs = self.voice_synthesizer.synthesize_podcast_script(
+            turns=[t.to_dict() for t in turns],
+            output_path=podcast_wav,
+            genre=genre,
+        )
+
+        # Rebuild SubtitleSegments, StoryScenes, and TimelineClips synced 1:1 to voice durations
+        project.podcast_turns = turns
+        project.subtitles = []
+        project.scenes = []
+        for idx, seg_info in enumerate(timed_segs, start=1):
+            sub = SubtitleSegment(
+                start_time=float(seg_info["start_time"]),
+                end_time=float(seg_info["end_time"]),
+                text=str(seg_info["text"]),
+            )
+            sub.ensure_word_timestamps()
+            project.subtitles.append(sub)
+            project.scenes.append(
+                StoryScene(
+                    scene_id=f"pod_scene_{idx:02d}",
+                    title=f"{seg_info['speaker_name']} #{idx}",
+                    setting_context=f"{genre} • Studio",
+                    character_id=project.characters[idx % len(project.characters)].character_id if project.characters else "char_host",
+                    narration_text=str(seg_info["text"]),
+                    start_time=float(seg_info["start_time"]),
+                    duration_sec=max(0.3, round(float(seg_info["end_time"]) - float(seg_info["start_time"]), 3)),
+                    transition_in=project.transition_preset,
+                    animation_preset=project.animation_preset,
+                )
+            )
+
+        total_dur = max(2.0, project.subtitles[-1].end_time if project.subtitles else 6.0)
+        project.audio_path = stitched_wav
+        project.timeline_clips = []
+        project.ensure_timeline_clips(total_dur)
+
+        # Extend base video smoothly to podcast length, replace audio, render overlay & mix genre BGM
+        base_for_audio = project.raw_video_path
+        if not base_for_audio or not base_for_audio.exists():
+            base_for_audio = self.downloader.download("demo://sample", project_dir)
+            project.raw_video_path = base_for_audio
+
+        voiced_base = project_dir / f"{project.project_id}_pod_base.mp4"
+        voiced_base = self.processor.replace_audio_track(base_for_audio, stitched_wav, voiced_base)
+
+        renderer = RendererFactory.get_renderer(project.engine_type)
+        overlay_target = project_dir / f"{project.project_id}_overlay.mp4"
+        props = {
+            "project_id": project.project_id,
+            "engine": project.engine_type.value,
+            "animation_preset": project.animation_preset,
+            "scene_context": project.scene_context.to_dict(),
+            "characters": [c.to_dict() for c in project.characters],
+            "duration_seconds": total_dur,
+            "subtitles": [s.to_dict() for s in project.subtitles],
+        }
+        project.overlay_video_path = renderer.render_composition(project.template_id, props, overlay_target)
+
+        merged_out = project_dir / f"{project.project_id}_pod_merged.mp4"
+        merged_out = self.processor.merge_and_export(
+            voiced_base,
+            project.overlay_video_path,
+            merged_out,
+            subtitles=project.subtitles,
+        )
+
+        bgm_wav = self.audio_library.resolve_bgm(str(cfg["bgm"]), project_dir / "assets" / "audio", duration_sec=total_dur)
+        final_pod = project_dir / f"{project.project_id}_podcast_final.mp4"
+        project.final_output_path = self.processor.mix_audio_tracks(merged_out, bgm_wav, final_pod, bg_volume=bgm_volume)
+        project.bgm_preset = str(cfg["bgm"])
+        project.status = JobStatus.COMPLETED
+        project.progress_percent = 100
+        project.current_step = f"Podcast Ready ({genre} • {len(turns)} turns • {total_dur:.1f}s)"
+        project.append_log(
+            "PODCAST",
+            f"Generate Podcast ({genre})",
+            f"Synthesized {len(turns)} multi-voice turns ({host_voice_id} / {guest_voice_id}) + BGM '{cfg['bgm']}'.",
+        )
+        return self.repository.save(project)
+
+    def dub_project_video(
+        self,
+        project_id: str,
+        target_language: str = "vi-VN",
+        voice_id: str = "vi-VN-HoaiMyNeural",
+        translated_lines: List[str] | None = None,
+    ) -> VideoProject:
+        """Time-aligned AI Video Dubbing inspired by VoiceStudio (dubbing subtitles matched to timeline windows)."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+
+        lines = translated_lines or [s.text for s in project.subtitles]
+        if not lines:
+            lines = ["Kinetix Studio Dubbed Narration"]
+
+        turns: List[Dict[str, Any]] = []
+        for idx, text in enumerate(lines, start=1):
+            turns.append(
+                {
+                    "turn_id": f"dub_{idx:02d}",
+                    "speaker_name": f"Dub ({target_language})",
+                    "voice_id": voice_id,
+                    "emotion": "warm",
+                    "text": text,
+                    "pause_after_ms": 200,
+                }
+            )
+
+        project_dir = self.workspace_root / project.project_id
+        dub_wav = project_dir / "assets" / "audio" / f"{project.project_id}_dub_{target_language}.wav"
+        stitched_wav, timed_segs = self.voice_synthesizer.synthesize_podcast_script(turns, dub_wav, genre="dubbing")
+
+        dubbed_video = project_dir / f"{project.project_id}_dubbed.mp4"
+        project.final_output_path = self.processor.replace_audio_track(project.final_output_path, stitched_wav, dubbed_video)
+        project.voice_id = voice_id
+        project.subtitles = [
+            SubtitleSegment(start_time=float(s["start_time"]), end_time=float(s["end_time"]), text=str(s["text"]))
+            for s in timed_segs
+        ]
+        for s in project.subtitles:
+            s.ensure_word_timestamps()
+
+        project.current_step = f"Video Dubbed ({target_language} • {voice_id})"
+        project.append_log("DUBBING", "AI Video Dubbing", f"Dubbed {len(turns)} segments in {target_language} using '{voice_id}'.")
         return self.repository.save(project)

@@ -94,6 +94,7 @@ class AutoVideoPipeline:
             overlay_target = work_dir / f"{project.project_id}_overlay.mp4"
             probe_info = self.processor.probe_media(project.raw_video_path)
             raw_duration = float(probe_info.get("duration_seconds") or 6.0)
+            project.ensure_timeline_clips(raw_duration)
             props = {
                 "project_id": project.project_id,
                 "engine": project.engine_type.value,

@@ -12,7 +12,10 @@ from src.presentation.mcp.mcp_server import (
     kinetix_capture_snapshot,
     kinetix_change_speed,
     kinetix_clone_project,
+    kinetix_clone_voice,
     kinetix_delete_project,
+    kinetix_design_voice,
+    kinetix_dub_video,
     kinetix_generate_voiceover,
     kinetix_get_project,
     kinetix_health_check,
@@ -20,8 +23,10 @@ from src.presentation.mcp.mcp_server import (
     kinetix_list_projects,
     kinetix_manage_character,
     kinetix_manage_scene,
+    kinetix_manage_timeline_clip,
     kinetix_master_audio,
     kinetix_probe_media,
+    kinetix_produce_podcast,
     kinetix_produce_video,
     kinetix_reframe_video,
     kinetix_trim_video,
@@ -158,6 +163,26 @@ def test_mcp_server_tools_produce_and_update_video(tmp_path: Path) -> None:
     assert cloned["project_id"] == "mcp_ai_copy"
     deleted = kinetix_delete_project("mcp_ai_copy", workspace_dir=ws)
     assert deleted["deleted"] is True
+
+    # 8. v4.0 MCP Timeline Clip CRUD, VoiceStudio Design & Podcast Production
+    tl = kinetix_manage_timeline_clip(
+        "mcp_ai_demo", action="add", track_id="S1", label="MCP Cue", start_time=0.0, end_time=1.5, workspace_dir=ws
+    )
+    assert any(c["label"] == "MCP Cue" for c in tl["timeline_clips"])
+
+    dv = kinetix_design_voice(name="MCPNarrator", prompt_description="Giọng kể chuyện truyền cảm", seed=99, workspace_dir=ws)
+    assert dv["mode"] == "designed"
+
+    pod = kinetix_produce_podcast(
+        project_id="mcp_podcast_demo",
+        raw_content="Host: Xin chào!|Guest: Chào mừng đến với Kinetix Podcast!",
+        genre="late_night_story",
+        host_voice_id="win-sapi-studio",
+        guest_voice_id="win-sapi-studio",
+        workspace_dir=ws,
+    )
+    assert Path(pod["final_output_path"]).exists()
+    assert len(pod["podcast_turns"]) == 2
 
 
 def test_fastapi_mcp_command_endpoint(tmp_path: Path) -> None:

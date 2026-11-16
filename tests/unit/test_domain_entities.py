@@ -12,14 +12,18 @@ from src.domain.entities import (
     ColorLookPreset,
     JobStatus,
     MediaAsset,
+    PodcastTurn,
     RenderEngineType,
     RenderJob,
     SceneContext,
     StoryScene,
+    StorytellingGenre,
     SubtitleSegment,
     TemplatePreset,
+    TimelineClip,
     TransitionPreset,
     VideoProject,
+    VoiceProfile,
     WordTimestamp,
 )
 from src.domain.interfaces import (
@@ -147,3 +151,20 @@ def test_v3_studio_entities_and_audit_log() -> None:
     assert len(data["scenes"]) == 1
     assert len(data["audit_logs"]) == 1
     assert AuditLogEntry.from_dict(data["audit_logs"][0]).action == "Add Scene"
+
+
+def test_v4_timeline_clip_voice_profile_and_podcast_entities() -> None:
+    assert StorytellingGenre("late_night_story") == StorytellingGenre.LATE_NIGHT_STORY
+    assert StorytellingGenre("podcast_dialogue") == StorytellingGenre.PODCAST_DIALOGUE
+
+    clip = TimelineClip(clip_id="c_v1", track_id="v1", label="Intro Cut", start_time=0.0, end_time=2.5)
+    assert clip.track_id == "V1"
+    vp = VoiceProfile(profile_id="vp_1", name="Warm Host", mode="designed", consent_verified=True)
+    assert vp.to_dict()["mode"] == "designed"
+    turn = PodcastTurn(turn_id="t1", speaker_name="Host", voice_id="vi-VN-HoaiMyNeural", text="Hello")
+    assert turn.to_dict()["speaker_name"] == "Host"
+
+    proj = VideoProject(project_id="proj_v4", source_url="demo://sample")
+    proj.ensure_timeline_clips(6.0)
+    assert len(proj.timeline_clips) >= 3
+    assert any(c.track_id == "V1" for c in proj.timeline_clips)

@@ -233,13 +233,21 @@ class WhisperAdapter(ITranscriber):
 
     @staticmethod
     def _align_script_to_duration(script_text: str, total_duration: float) -> List[SubtitleSegment]:
-        """Split script_text (by '|' or newlines) into evenly timed SubtitleSegments with WordTimestamps."""
+        """Split script_text (by '|', newlines, or sentences) into evenly timed SubtitleSegments with WordTimestamps."""
+        import re
+
         raw_parts = [
             p.strip()
             for line in script_text.splitlines()
             for p in line.split("|")
             if p.strip()
         ]
+        # Smart sentence boundary split when user pastes a multi-sentence paragraph without '|'
+        if len(raw_parts) == 1:
+            sentence_parts = [s.strip() for s in re.split(r"(?<=[.!?।])\s+", raw_parts[0]) if s.strip()]
+            if len(sentence_parts) > 1:
+                raw_parts = sentence_parts
+
         if not raw_parts:
             raw_parts = ["Kinetix Studio Automated Video Production"]
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -28,13 +29,17 @@ public partial class MainWindow : Window
     private int _knownProjectCount;
     private bool _isPlaying;
     private double _videoDurationSeconds = 6.0;
+    private string? _selectedClipId;
 
     public ObservableCollection<SubtitleSegmentDto> SubtitleItems { get; } = new();
     public ObservableCollection<ProjectResponseDto> ProjectItems { get; } = new();
     public ObservableCollection<StorySceneDto> SceneItems { get; } = new();
     public ObservableCollection<CharacterProfileDto> CharacterItems { get; } = new();
     public ObservableCollection<AuditLogEntryDto> AuditLogItems { get; } = new();
+    public ObservableCollection<TimelineClipBlockVm> TimelineV2Blocks { get; } = new();
+    public ObservableCollection<TimelineClipBlockVm> TimelineV1Blocks { get; } = new();
     public ObservableCollection<TimelineClipBlockVm> TimelineSubtitleBlocks { get; } = new();
+    public ObservableCollection<TimelineClipBlockVm> TimelineA1Blocks { get; } = new();
     public ObservableCollection<TimelineClipBlockVm> TimelineBeatMarkers { get; } = new();
 
     public MainWindow()
@@ -45,7 +50,10 @@ public partial class MainWindow : Window
         GridCharacters.ItemsSource = CharacterItems;
         GridAuditLogs.ItemsSource = AuditLogItems;
         LstProjects.ItemsSource = ProjectItems;
+        IcTimelineV2.ItemsSource = TimelineV2Blocks;
+        IcTimelineV1.ItemsSource = TimelineV1Blocks;
         IcTimelineSubtitles.ItemsSource = TimelineSubtitleBlocks;
+        IcTimelineA1.ItemsSource = TimelineA1Blocks;
         IcTimelineBeats.ItemsSource = TimelineBeatMarkers;
 
         _mcpSyncTimer.Tick += McpSyncTimer_Tick;
@@ -56,8 +64,9 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        AppendLog("Kinetix Studio v3.0 initialized (Storyboard, Characters, Voice/SFX/BGM, Beat-Cut).");
+        AppendLog("Kinetix Studio v4.0 initialized (Interactive Timeline CRUD, Podcast AI, VoiceStudio Cloning/Design).");
         await EnsureBackendRunningAsync();
+        await RefreshCustomVoicesAsync();
         await RefreshProjectsAsync(selectLatestIfNew: true);
         _mcpSyncTimer.Start();
     }
@@ -105,7 +114,10 @@ public partial class MainWindow : Window
 
     private void RebuildVisualTimeline()
     {
-        double totalDur = Math.Max(1.0, _videoDurationSeconds);
+        double maxClipEnd = _currentProject?.TimelineClips?.Count > 0
+            ? _currentProject.TimelineClips.Max(c => c.EndTime)
+            : 0.0;
+        double totalDur = Math.Max(1.0, Math.Max(_videoDurationSeconds, maxClipEnd));
         double trackWidth = Math.Max(200.0, TimelineTrackArea.ActualWidth);
 
         TxtRuler1.Text = $"00:{(totalDur * 0.2):00.0}";
@@ -114,47 +126,88 @@ public partial class MainWindow : Window
         TxtRuler4.Text = $"00:{(totalDur * 0.8):00.0}";
         TxtRuler5.Text = $"00:{totalDur:00.0}";
 
+        TimelineV2Blocks.Clear();
+        TimelineV1Blocks.Clear();
         TimelineSubtitleBlocks.Clear();
-        foreach (var seg in SubtitleItems)
-        {
-            double left = (seg.StartTime / totalDur) * trackWidth;
-            double width = Math.Max(24.0, ((seg.EndTime - seg.StartTime) / totalDur) * trackWidth - 2);
-            TimelineSubtitleBlocks.Add(new TimelineClipBlockVm
-            {
-                Label = $"{seg.StartTime:0.0}s: {seg.Text}",
-                StartTime = seg.StartTime,
-                EndTime = seg.EndTime,
-                LeftPx = Math.Max(0, left),
-                WidthPx = width,
-            });
-        }
-
+        TimelineA1Blocks.Clear();
         TimelineBeatMarkers.Clear();
-        if (_currentProject?.BeatTimestamps != null)
+
+        var clips = _currentProject?.TimelineClips;
+        if (clips != null && clips.Count > 0)
         {
-            foreach (var b in _currentProject.BeatTimestamps)
+            foreach (var c in clips)
             {
-                double left = (b / totalDur) * trackWidth;
-                TimelineBeatMarkers.Add(new TimelineClipBlockVm
+                double left = (c.StartTime / totalDur) * trackWidth;
+                double width = Math.Max(22.0, ((c.EndTime - c.StartTime) / totalDur) * trackWidth - 2);
+                bool sel = string.Equals(c.ClipId, _selectedClipId, StringComparison.OrdinalIgnoreCase);
+
+                var (bg, border) = c.TrackId.ToUpperInvariant() switch
                 {
-                    Label = $"Beat @ {b:0.00}s",
-                    StartTime = b,
-                    LeftPx = Math.Max(0, left - 4),
-                    WidthPx = 8,
+                    "V2" => ("#172554", sel ? "#FFFFFF" : "#3B82F6"),
+                    "V1" => ("#064E3B", sel ? "#FFFFFF" : "#10B981"),
+                    "S1" => ("#422006", sel ? "#FFFFFF" : "#F59E0B"),
+                    "A1" => ("#2E1065", sel ? "#FFFFFF" : "#8B5CF6"),
+                    _ => ("#0C4A6E", sel ? "#FFFFFF" : "#38BDF8"),
+                };
+
+                var vm = new TimelineClipBlockVm
+                {
+                    ClipId = c.ClipId,
+                    TrackId = c.TrackId.ToUpperInvariant(),
+                    Label = c.TrackId.Equals("S1", StringComparison.OrdinalIgnoreCase)
+                        ? $"{c.StartTime:0.0}s: {c.Label}"
+                        : c.Label,
+                    StartTime = c.StartTime,
+                    EndTime = c.EndTime,
+                    LeftPx = Math.Max(0, left),
+                    WidthPx = width,
+                    BackgroundHex = bg,
+                    BorderHex = border,
+                    BorderThicknessStr = sel ? "2" : "1",
+                };
+
+                switch (vm.TrackId)
+                {
+                    case "V2": TimelineV2Blocks.Add(vm); break;
+                    case "V1": TimelineV1Blocks.Add(vm); break;
+                    case "S1": TimelineSubtitleBlocks.Add(vm); break;
+                    case "A1": TimelineA1Blocks.Add(vm); break;
+                    case "B1":
+                        vm.WidthPx = 9;
+                        vm.LeftPx = Math.Max(0, left - 4);
+                        TimelineBeatMarkers.Add(vm);
+                        break;
+                }
+            }
+        }
+        else if (_currentProject != null)
+        {
+            TimelineV2Blocks.Add(new TimelineClipBlockVm { ClipId = "v2_overlay_01", TrackId = "V2", Label = $"{_currentProject.EngineUpper} | {_currentProject.TemplateId}", StartTime = 0, EndTime = totalDur, LeftPx = 0, WidthPx = Math.Max(40, trackWidth - 2), BackgroundHex = "#172554", BorderHex = "#3B82F6" });
+            TimelineV1Blocks.Add(new TimelineClipBlockVm { ClipId = "v1_video_01", TrackId = "V1", Label = $"MASTER VIDEO ({totalDur:0.0}s)", StartTime = 0, EndTime = totalDur, LeftPx = 0, WidthPx = Math.Max(40, trackWidth - 2), BackgroundHex = "#064E3B", BorderHex = "#10B981" });
+            TimelineA1Blocks.Add(new TimelineClipBlockVm { ClipId = "a1_audio_01", TrackId = "A1", Label = $"AUDIO + VOICE ({_currentProject.VoiceId})", StartTime = 0, EndTime = totalDur, LeftPx = 0, WidthPx = Math.Max(40, trackWidth - 2), BackgroundHex = "#2E1065", BorderHex = "#8B5CF6" });
+
+            int idx = 1;
+            foreach (var seg in SubtitleItems)
+            {
+                double left = (seg.StartTime / totalDur) * trackWidth;
+                double width = Math.Max(22.0, ((seg.EndTime - seg.StartTime) / totalDur) * trackWidth - 2);
+                TimelineSubtitleBlocks.Add(new TimelineClipBlockVm
+                {
+                    ClipId = $"s1_sub_{idx++:00}",
+                    TrackId = "S1",
+                    Label = $"{seg.StartTime:0.0}s: {seg.Text}",
+                    StartTime = seg.StartTime,
+                    EndTime = seg.EndTime,
+                    LeftPx = Math.Max(0, left),
+                    WidthPx = width,
+                    BackgroundHex = "#422006",
+                    BorderHex = "#F59E0B",
                 });
             }
         }
-
-        if (_currentProject != null)
-        {
-            TxtTrackV2.Text = $"{_currentProject.EngineUpper} OVERLAY  |  {_currentProject.TemplateId} ({_currentProject.AnimationPreset}) • {SubtitleItems.Count} cues";
-        }
     }
 
-    private void TimelineTrackArea_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        RebuildVisualTimeline();
-    }
+    private void TimelineTrackArea_SizeChanged(object sender, SizeChangedEventArgs e) => RebuildVisualTimeline();
 
     private void TimelineCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -164,11 +217,22 @@ public partial class MainWindow : Window
         SeekMonitorTo(targetSec);
     }
 
-    private void SubtitleTimelineBlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void TimelineClipBlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.DataContext is TimelineClipBlockVm block)
         {
+            _selectedClipId = block.ClipId;
+            SelectComboByTag(CmbClipTrack, block.TrackId);
+            TxtClipStart.Text = block.StartTime.ToString("0.00", CultureInfo.InvariantCulture);
+            TxtClipEnd.Text = block.EndTime.ToString("0.00", CultureInfo.InvariantCulture);
+
+            // Strip visual "0.0s: " prefix when loading S1 into editor box
+            var rawDto = _currentProject?.TimelineClips?.FirstOrDefault(x => x.ClipId == block.ClipId);
+            TxtClipLabel.Text = rawDto?.Label ?? block.Label;
+
             SeekMonitorTo(block.StartTime);
+            RebuildVisualTimeline();
+            AppendLog($"Selected clip [{block.TrackId}] '{block.ClipId}' ({block.StartTime:0.00}s - {block.EndTime:0.00}s).");
             e.Handled = true;
         }
     }
@@ -257,6 +321,39 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task RefreshCustomVoicesAsync()
+    {
+        try
+        {
+            var profiles = await _http.GetFromJsonAsync<VoiceProfileDto[]>("/api/v1/voices/profiles");
+            if (profiles == null) return;
+            foreach (var p in profiles)
+            {
+                var vid = !string.IsNullOrWhiteSpace(p.VoiceId) ? p.VoiceId : p.ProfileId;
+                if (string.IsNullOrWhiteSpace(vid)) continue;
+                EnsureVoiceInCombo(CmbVoiceId, p.Name, vid);
+                EnsureVoiceInCombo(CmbPodcastHostVoice, $"Host: {p.Name}", vid);
+                EnsureVoiceInCombo(CmbPodcastGuestVoice, $"Guest: {p.Name}", vid);
+            }
+        }
+        catch
+        {
+            // Ignore when backend is starting up
+        }
+    }
+
+    private static void EnsureVoiceInCombo(ComboBox combo, string label, string tagValue)
+    {
+        for (int i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is ComboBoxItem item && string.Equals(item.Tag?.ToString(), tagValue, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+        combo.Items.Add(new ComboBoxItem { Content = label, Tag = tagValue });
+    }
+
     private async Task RefreshProjectsAsync(bool selectLatestIfNew = false, bool forceReloadList = false)
     {
         try
@@ -341,13 +438,11 @@ public partial class MainWindow : Window
         SubtitleItems.Clear();
         foreach (var seg in project.Subtitles) SubtitleItems.Add(seg);
 
-        // Bind Context Bible
         var ctx = project.SceneContext ?? new SceneContextDto();
         TxtWorldSetting.Text = ctx.WorldSetting;
         TxtVisualStyle.Text = ctx.VisualStyle;
         TxtLightingMood.Text = ctx.LightingMood;
 
-        // Bind Scenes, Characters, and Audit Logs
         SceneItems.Clear();
         foreach (var sc in project.Scenes) SceneItems.Add(sc);
 
@@ -407,9 +502,7 @@ public partial class MainWindow : Window
             TxtSpecDuration.Text = $"DUR: {probe.DurationSeconds:0.00}s";
             TxtSpecSize.Text = $"SIZE: {(probe.SizeBytes / 1024.0):0.0} KB";
             TxtTrimEnd.Text = probe.DurationSeconds.ToString("0.00", CultureInfo.InvariantCulture);
-            TxtTrackV1.Text = $"MASTER VIDEO ({probe.VideoCodec} • {probe.Resolution} • {probe.Fps:0.00} fps • {probe.DurationSeconds:0.00}s)";
-            TxtTrackA1.Text = $"AUDIO + VOICE  ▂▄▆█▄▂▅▇▃▂▆█▄▂▅▇▃▂▆█▄▂ ({probe.AudioCodec.ToUpperInvariant()} / {probe.SampleRate}Hz)";
-            TxtTimelineSummary.Text = $"5 Tracks Active | {probe.Resolution} @ {probe.Fps:0.00} fps";
+            TxtTimelineSummary.Text = $"{_currentProject?.TimelineClips?.Count ?? 4} Clips | {probe.Resolution} @ {probe.Fps:0.00} fps";
         }
         catch
         {
@@ -482,19 +575,18 @@ public partial class MainWindow : Window
     private void BtnMarkIn_Click(object sender, RoutedEventArgs e)
     {
         TxtTrimStart.Text = SliderScrub.Value.ToString("0.00", CultureInfo.InvariantCulture);
-        AppendLog($"Marked Trim IN at {SliderScrub.Value:0.00}s");
+        TxtClipStart.Text = TxtTrimStart.Text;
+        AppendLog($"Marked IN at {SliderScrub.Value:0.00}s");
     }
 
     private void BtnMarkOut_Click(object sender, RoutedEventArgs e)
     {
         TxtTrimEnd.Text = SliderScrub.Value.ToString("0.00", CultureInfo.InvariantCulture);
-        AppendLog($"Marked Trim OUT at {SliderScrub.Value:0.00}s");
+        TxtClipEnd.Text = TxtTrimEnd.Text;
+        AppendLog($"Marked OUT at {SliderScrub.Value:0.00}s");
     }
 
-    private void SliderScrub_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        SeekMonitorTo(SliderScrub.Value);
-    }
+    private void SliderScrub_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e) => SeekMonitorTo(SliderScrub.Value);
 
     private string GetSelectedEngine()
     {
@@ -524,6 +616,262 @@ public partial class MainWindow : Window
     }
 
     // ==========================================================
+    // INTERACTIVE MULTI-TRACK TIMELINE CLIP CRUD (ADD / EDIT / SPLIT / CLONE / DELETE / RENDER)
+    // ==========================================================
+
+    private async Task ExecuteTimelineActionAsync(string action, bool renderTimeline = false)
+    {
+        if (_currentProject == null) return;
+        if (!double.TryParse(TxtClipStart.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double st)) st = 0.0;
+        if (!double.TryParse(TxtClipEnd.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double en)) en = Math.Max(st + 2.0, 2.0);
+        if (en <= st) en = st + 0.5;
+
+        try
+        {
+            if (renderTimeline || action == "render")
+            {
+                await ReleaseVideoPlayerLockAsync();
+            }
+            var req = new ManageTimelineClipRequestDto
+            {
+                Action = action,
+                ClipId = _selectedClipId,
+                SplitTime = SliderScrub.Value,
+                RenderTimeline = renderTimeline,
+                Clip = new TimelineClipDto
+                {
+                    ClipId = _selectedClipId ?? string.Empty,
+                    TrackId = GetComboTag(CmbClipTrack, "S1"),
+                    Label = TxtClipLabel.Text.Trim(),
+                    StartTime = st,
+                    EndTime = en,
+                    SourceStart = st,
+                    SourceEnd = en,
+                },
+            };
+
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/timeline-clips", req);
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await BindProjectAsync(updated);
+                AppendLog($"Timeline [{action.ToUpperInvariant()}] completed ({updated.TimelineClips.Count} clips).");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Timeline {action} error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Timeline Edit Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void BtnTimelineAddClip_Click(object sender, RoutedEventArgs e) => await ExecuteTimelineActionAsync("add");
+    private async void BtnTimelineSaveClip_Click(object sender, RoutedEventArgs e) => await ExecuteTimelineActionAsync("update");
+    private async void BtnTimelineSplitClip_Click(object sender, RoutedEventArgs e) => await ExecuteTimelineActionAsync("split");
+    private async void BtnTimelineCloneClip_Click(object sender, RoutedEventArgs e) => await ExecuteTimelineActionAsync("clone");
+    private async void BtnTimelineDeleteClip_Click(object sender, RoutedEventArgs e) => await ExecuteTimelineActionAsync("delete");
+    private async void BtnTimelineRenderVideo_Click(object sender, RoutedEventArgs e) => await ExecuteTimelineActionAsync("render", renderTimeline: true);
+
+    // ==========================================================
+    // USER GUIDE BUTTON (OPEN GENERATED HTML OR DOCX)
+    // ==========================================================
+
+    private void BtnOpenUserGuide_Click(object sender, RoutedEventArgs e)
+    {
+        var repoRoot = FindRepositoryRoot();
+        var docsDir = Path.Combine(repoRoot, "docs");
+        var htmlPath = Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.html");
+        var docxPath = Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.docx");
+
+        if (File.Exists(htmlPath))
+        {
+            Process.Start(new ProcessStartInfo(htmlPath) { UseShellExecute = true });
+            AppendLog($"Opened Enterprise User Guide: {htmlPath}");
+        }
+        else if (File.Exists(docxPath))
+        {
+            Process.Start(new ProcessStartInfo(docxPath) { UseShellExecute = true });
+            AppendLog($"Opened Word User Guide: {docxPath}");
+        }
+        else
+        {
+            MessageBox.Show($"User Guide not found in {docsDir}", "User Guide", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    // ==========================================================
+    // PODCAST & VOICESTUDIO AI (GENERATION / DESIGN / CLONE / DUBBING)
+    // ==========================================================
+
+    private async void BtnGeneratePodcast_Click(object sender, RoutedEventArgs e)
+    {
+        BtnGeneratePodcast.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            await ReleaseVideoPlayerLockAsync();
+            var targetProj = _currentProject?.ProjectId ?? TxtProjectId.Text.Trim();
+            if (string.IsNullOrWhiteSpace(targetProj)) targetProj = "kinetix_podcast_01";
+
+            var genre = GetComboTag(CmbPodcastGenre, "podcast_dialogue");
+            var hostVoice = GetComboTag(CmbPodcastHostVoice, "vi-VN-HoaiMyNeural");
+            var guestVoice = GetComboTag(CmbPodcastGuestVoice, "vi-VN-NamMinhNeural");
+
+            var req = new PodcastRequestDto
+            {
+                RawContent = TxtPodcastContent.Text.Trim(),
+                Genre = genre,
+                HostVoiceId = hostVoice,
+                GuestVoiceId = guestVoice,
+                BgmVolume = 0.14,
+            };
+            AppendLog($"Generating Multi-Voice Podcast '{targetProj}' [genre={genre}, host={hostVoice}, guest={guestVoice}]...");
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{targetProj}/podcast", req);
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await RefreshProjectsAsync(forceReloadList: true);
+                await BindProjectAsync(updated);
+                AppendLog($"Podcast exported: {updated.FinalOutputPath} ({updated.PodcastTurns.Count} turns).");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Podcast error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Podcast Studio Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            BtnGeneratePodcast.IsEnabled = true;
+        }
+    }
+
+    private async void BtnDesignVoice_Click(object sender, RoutedEventArgs e)
+    {
+        BtnDesignVoice.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            var req = new VoiceDesignRequestDto
+            {
+                Name = TxtVoiceDesignName.Text.Trim(),
+                PromptDescription = TxtVoiceDesignPrompt.Text.Trim(),
+                Seed = 42,
+                Language = "vi-VN",
+            };
+            AppendLog($"Designing synthetic voice profile '{req.Name}' (VoiceStudio Voice Design)...");
+            var response = await _http.PostAsJsonAsync("/api/v1/voices/design", req);
+            response.EnsureSuccessStatusCode();
+            var profile = await response.Content.ReadFromJsonAsync<VoiceProfileDto>();
+            await RefreshCustomVoicesAsync();
+            AppendLog($"Voice Designed & Saved: id='{profile?.ProfileId}', name='{profile?.Name}'. Added to Voice dropdowns!");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Voice design error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Voice Design Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            BtnDesignVoice.IsEnabled = true;
+        }
+    }
+
+    private void BtnBrowseCloneAudio_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "Audio Files (*.wav;*.mp3;*.m4a)|*.wav;*.mp3;*.m4a|All Files (*.*)|*.*",
+            Title = "Select Clean Reference Voice Recording (With Speaker Consent)"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            TxtCloneRefAudioPath.Text = dlg.FileName;
+        }
+    }
+
+    private async void BtnCloneVoice_Click(object sender, RoutedEventArgs e)
+    {
+        if (ChkCloneConsent.IsChecked != true)
+        {
+            MessageBox.Show(
+                "Per VoiceStudio ethics policy, you MUST verify explicit speaker consent before cloning a voice.",
+                "Consent Verification Required",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+            return;
+        }
+
+        BtnCloneVoice.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            var req = new VoiceCloneRequestDto
+            {
+                Name = TxtCloneVoiceName.Text.Trim(),
+                ReferenceAudioPath = TxtCloneRefAudioPath.Text.Trim(),
+                ConsentVerified = true,
+                Language = "vi-VN",
+            };
+            AppendLog($"Cloning voice '{req.Name}' from '{req.ReferenceAudioPath}'...");
+            var response = await _http.PostAsJsonAsync("/api/v1/voices/clone", req);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                throw new Exception(err);
+            }
+            var profile = await response.Content.ReadFromJsonAsync<VoiceProfileDto>();
+            await RefreshCustomVoicesAsync();
+            AppendLog($"Cloned Voice Saved: id='{profile?.ProfileId}', name='{profile?.Name}'.");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Voice clone error: {ex.Message}");
+            MessageBox.Show(ex.Message, "Voice Clone Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            BtnCloneVoice.IsEnabled = true;
+        }
+    }
+
+    private async void BtnDubVideo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentProject == null) return;
+        BtnDubVideo.IsEnabled = false;
+        try
+        {
+            await ReleaseVideoPlayerLockAsync();
+            var voiceId = GetComboTag(CmbPodcastHostVoice, "vi-VN-HoaiMyNeural");
+            var req = new DubbingRequestDto
+            {
+                TargetLanguage = voiceId.StartsWith("en", StringComparison.OrdinalIgnoreCase) ? "en-US" : "vi-VN",
+                VoiceId = voiceId,
+            };
+            AppendLog($"Auto-Dubbing '{_currentProject.ProjectId}' with time-aligned '{voiceId}'...");
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/dubbing", req);
+            response.EnsureSuccessStatusCode();
+            var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
+            if (updated != null)
+            {
+                await BindProjectAsync(updated);
+                AppendLog($"Video Dubbed: {updated.FinalOutputPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Dubbing error: {ex.Message}");
+        }
+        finally
+        {
+            BtnDubVideo.IsEnabled = true;
+        }
+    }
+
+    // ==========================================================
     // LEFT DOCK: INGEST, PIPELINE & PROJECT CLONE / DELETE
     // ==========================================================
 
@@ -545,13 +893,12 @@ public partial class MainWindow : Window
                 TxtSpecResolution.Text = $"RES: {meta.Resolution}";
                 TxtSpecFps.Text = $"FPS: {meta.Fps:0.00}";
                 TxtSpecDuration.Text = $"DUR: {meta.Duration:0.00}s";
-                AppendLog($"Source inspected: title='{meta.Title}', type={meta.SourceType}, res={meta.Resolution}, duration={meta.Duration:0.00}s");
+                AppendLog($"Source inspected: title='{meta.Title}', type={meta.SourceType}, res={meta.Resolution}, dur={meta.Duration:0.00}s");
             }
         }
         catch (Exception ex)
         {
             AppendLog($"Source inspect error: {ex.Message}");
-            MessageBox.Show(ex.Message, "Inspect Source Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -590,7 +937,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppendLog($"MCP Command Error: {ex.Message}");
-            MessageBox.Show(ex.Message, "MCP Command Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -673,7 +1019,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppendLog($"Clone project error: {ex.Message}");
-            MessageBox.Show(ex.Message, "Clone Project Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -706,7 +1051,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppendLog($"Delete project error: {ex.Message}");
-            MessageBox.Show(ex.Message, "Delete Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -749,7 +1093,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppendLog($"Re-render error: {ex.Message}");
-            MessageBox.Show(ex.Message, "Re-Render Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -782,7 +1125,6 @@ public partial class MainWindow : Window
             Text = $"{source.Text} (Copy)",
         });
         RebuildVisualTimeline();
-        AppendLog($"Cloned subtitle cue at {newStart:0.00}s.");
     }
 
     private void BtnSplitSubtitleCue_Click(object sender, RoutedEventArgs e)
@@ -790,11 +1132,7 @@ public partial class MainWindow : Window
         double playhead = SliderScrub.Value;
         var targetCue = SubtitleItems.FirstOrDefault(s => playhead > s.StartTime + 0.2 && playhead < s.EndTime - 0.2)
                         ?? GridSubtitles.SelectedItem as SubtitleSegmentDto;
-        if (targetCue == null)
-        {
-            AppendLog("Move playhead inside a subtitle cue (or select a cue) to split it.");
-            return;
-        }
+        if (targetCue == null) return;
 
         double splitPoint = (playhead > targetCue.StartTime + 0.2 && playhead < targetCue.EndTime - 0.2)
             ? Math.Round(playhead, 2)
@@ -859,7 +1197,7 @@ public partial class MainWindow : Window
     }
 
     // ==========================================================
-    // CONTEXT BIBLE & STORYBOARD SCENES TAB (CRUD + CLONE)
+    // CONTEXT, SCENES, CHARACTERS, SOUND LIBRARY, FX & BEAT-CUT
     // ==========================================================
 
     private async void BtnSaveContext_Click(object sender, RoutedEventArgs e)
@@ -932,19 +1270,12 @@ public partial class MainWindow : Window
             AnimationPreset = selected.AnimationPreset,
             SfxId = selected.SfxId,
         });
-        AppendLog($"Cloned scene '{selected.SceneId}'. Click 'Lưu Phân Cảnh' to persist.");
     }
 
     private void BtnDeleteScene_Click(object sender, RoutedEventArgs e)
     {
-        if (GridScenes.SelectedItem is StorySceneDto selected)
-        {
-            SceneItems.Remove(selected);
-        }
-        else if (SceneItems.Count > 0)
-        {
-            SceneItems.RemoveAt(SceneItems.Count - 1);
-        }
+        if (GridScenes.SelectedItem is StorySceneDto selected) SceneItems.Remove(selected);
+        else if (SceneItems.Count > 0) SceneItems.RemoveAt(SceneItems.Count - 1);
     }
 
     private async void BtnSaveScenes_Click(object sender, RoutedEventArgs e)
@@ -977,10 +1308,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // ==========================================================
-    // CONSISTENT CHARACTERS TAB (CRUD + CLONE)
-    // ==========================================================
-
     private void BtnAddCharacter_Click(object sender, RoutedEventArgs e)
     {
         int n = CharacterItems.Count + 1;
@@ -1010,19 +1337,12 @@ public partial class MainWindow : Window
             ThemeColor = selected.ThemeColor,
             VisualDescription = selected.VisualDescription,
         });
-        AppendLog($"Cloned character '{selected.Name}'. Click 'Lưu Nhân Vật' to persist.");
     }
 
     private void BtnDeleteCharacter_Click(object sender, RoutedEventArgs e)
     {
-        if (GridCharacters.SelectedItem is CharacterProfileDto selected)
-        {
-            CharacterItems.Remove(selected);
-        }
-        else if (CharacterItems.Count > 0)
-        {
-            CharacterItems.RemoveAt(CharacterItems.Count - 1);
-        }
+        if (GridCharacters.SelectedItem is CharacterProfileDto selected) CharacterItems.Remove(selected);
+        else if (CharacterItems.Count > 0) CharacterItems.RemoveAt(CharacterItems.Count - 1);
     }
 
     private async void BtnSaveCharacters_Click(object sender, RoutedEventArgs e)
@@ -1055,10 +1375,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // ==========================================================
-    // VOICEOVER TTS, SOUND LIBRARY (BGM/SFX), FX MOTION & BEAT-CUT
-    // ==========================================================
-
     private async void BtnGenerateVoiceover_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject == null) return;
@@ -1086,7 +1402,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             AppendLog($"Voiceover error: {ex.Message}");
-            MessageBox.Show(ex.Message, "Voiceover Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -1102,20 +1417,12 @@ public partial class MainWindow : Window
         {
             await ReleaseVideoPlayerLockAsync();
             var bgmId = GetComboTag(CmbBgmPreset, "bgm_ambient_pad");
-            var req = new SoundLibraryRequestDto
-            {
-                BgmPreset = bgmId,
-                BgmVolume = Math.Round(SliderBgmVolume.Value, 2),
-            };
-            AppendLog($"Mixing BGM preset '{bgmId}' (vol={req.BgmVolume:0.00})...");
+            var req = new SoundLibraryRequestDto { BgmPreset = bgmId, BgmVolume = Math.Round(SliderBgmVolume.Value, 2) };
+            AppendLog($"Mixing BGM preset '{bgmId}'...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/sound-library", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"BGM mixed: {updated.FinalOutputPath}");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1130,30 +1437,18 @@ public partial class MainWindow : Window
     private async void BtnInsertSfx_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject == null) return;
-        if (!double.TryParse(TxtSfxTimestamp.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double ts))
-        {
-            ts = SliderScrub.Value;
-        }
+        if (!double.TryParse(TxtSfxTimestamp.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double ts)) ts = SliderScrub.Value;
         BtnInsertSfx.IsEnabled = false;
         try
         {
             await ReleaseVideoPlayerLockAsync();
             var sfxId = GetComboTag(CmbSfxPreset, "sfx_whoosh_fast");
-            var req = new SoundLibraryRequestDto
-            {
-                SfxId = sfxId,
-                SfxTimestamp = Math.Max(0.0, ts),
-                SfxVolume = 0.70,
-            };
+            var req = new SoundLibraryRequestDto { SfxId = sfxId, SfxTimestamp = Math.Max(0.0, ts), SfxVolume = 0.70 };
             AppendLog($"Inserting SFX '{sfxId}' at {req.SfxTimestamp:0.00}s...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/sound-library", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"SFX mixed at {req.SfxTimestamp:0.00}s.");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1169,30 +1464,17 @@ public partial class MainWindow : Window
     {
         if (_currentProject == null) return;
         int bpm = 120;
-        if (CmbBeatBpm.SelectedItem is ComboBoxItem item &&
-            int.TryParse(item.Tag?.ToString(), out int parsed))
-        {
-            bpm = parsed;
-        }
+        if (CmbBeatBpm.SelectedItem is ComboBoxItem item && int.TryParse(item.Tag?.ToString(), out int parsed)) bpm = parsed;
         BtnApplyBeatCut.IsEnabled = false;
         try
         {
             await ReleaseVideoPlayerLockAsync();
-            var req = new BeatCutRequestDto
-            {
-                Bpm = bpm,
-                AlignSubtitles = ChkSnapSubtitles.IsChecked == true,
-                PulseFlash = ChkBeatPulse.IsChecked == true,
-            };
+            var req = new BeatCutRequestDto { Bpm = bpm, AlignSubtitles = ChkSnapSubtitles.IsChecked == true, PulseFlash = ChkBeatPulse.IsChecked == true };
             AppendLog($"Running Auto Beat-Cut at {bpm} BPM...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/beat-cut", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"Beat-Cut synced ({updated.BeatTimestamps.Count} beats @ {bpm} BPM).");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1213,25 +1495,16 @@ public partial class MainWindow : Window
             await ReleaseVideoPlayerLockAsync();
             var transition = GetComboTag(CmbTransitionPreset, "fade_black");
             var animation = GetComboTag(CmbAnimationPreset, "spring_pop");
-            var req = new FxMotionRequestDto
-            {
-                TransitionPreset = transition,
-                AnimationPreset = animation,
-            };
-            AppendLog($"Applying Transition '{transition}' + Animation '{animation}' via FFmpeg...");
+            var req = new FxMotionRequestDto { TransitionPreset = transition, AnimationPreset = animation };
+            AppendLog($"Applying Transition '{transition}' + Animation '{animation}'...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/fx-motion", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"FX Motion applied: {updated.FinalOutputPath}");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
             AppendLog($"FX Motion error: {ex.Message}");
-            MessageBox.Show(ex.Message, "FX Motion Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -1258,10 +1531,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // ==========================================================
-    // TRIM, SPEED, ASPECT RATIO, COLOR GRADING, SNAPSHOT & UTILS
-    // ==========================================================
-
     private async void BtnTrimVideo_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject == null) return;
@@ -1277,18 +1546,10 @@ public partial class MainWindow : Window
         try
         {
             await ReleaseVideoPlayerLockAsync();
-            AppendLog($"Trimming '{_currentProject.ProjectId}' ({startSec:0.00}s..{endSec:0.00}s)...");
-            var response = await _http.PostAsJsonAsync(
-                $"/api/v1/projects/{_currentProject.ProjectId}/trim",
-                new TrimVideoRequestDto { StartTime = startSec, EndTime = endSec }
-            );
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/trim", new TrimVideoRequestDto { StartTime = startSec, EndTime = endSec });
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"Trimmed MP4 saved: {updated.FinalOutputPath}");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1305,27 +1566,16 @@ public partial class MainWindow : Window
         if (_currentProject == null) return;
         double speed = 1.0;
         if (CmbSpeedFactor.SelectedItem is ComboBoxItem item &&
-            double.TryParse(item.Tag?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed))
-        {
-            speed = parsed;
-        }
+            double.TryParse(item.Tag?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed)) speed = parsed;
 
         BtnApplySpeed.IsEnabled = false;
         try
         {
             await ReleaseVideoPlayerLockAsync();
-            AppendLog($"Applying playback speed {speed:0.00}x...");
-            var response = await _http.PostAsJsonAsync(
-                $"/api/v1/projects/{_currentProject.ProjectId}/speed",
-                new SpeedChangeRequestDto { SpeedFactor = speed }
-            );
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/speed", new SpeedChangeRequestDto { SpeedFactor = speed });
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"Speed ramping ({speed:0.00}x) complete.");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1343,18 +1593,10 @@ public partial class MainWindow : Window
         try
         {
             await ReleaseVideoPlayerLockAsync();
-            AppendLog($"Reframing '{_currentProject.ProjectId}' to {aspectRatio}...");
-            var response = await _http.PostAsJsonAsync(
-                $"/api/v1/projects/{_currentProject.ProjectId}/reframe",
-                new ReframeRequestDto { AspectRatio = aspectRatio }
-            );
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/reframe", new ReframeRequestDto { AspectRatio = aspectRatio });
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"Reframed ({aspectRatio}) saved.");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1378,7 +1620,6 @@ public partial class MainWindow : Window
     {
         if (_currentProject == null) return;
         string preset = GetComboTag(CmbColorPreset, "natural");
-
         BtnApplyColorGrade.IsEnabled = false;
         try
         {
@@ -1391,15 +1632,10 @@ public partial class MainWindow : Window
                 Saturation = Math.Round(SliderSaturation.Value, 2),
                 Gamma = 1.0,
             };
-            AppendLog($"Applying Color Grade '{preset}'...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/color-grade", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog($"Color Grade applied.");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1426,15 +1662,10 @@ public partial class MainWindow : Window
                 BgmSource = "demo://bgm",
                 BgVolume = 0.18,
             };
-            AppendLog($"Executing Audio Mastering (SilenceCut={req.RemoveSilence}, Loudnorm={req.NormalizeLoudness}, BGM={req.MixBgm})...");
             var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/audio-master", req);
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ProjectResponseDto>();
-            if (updated != null)
-            {
-                await BindProjectAsync(updated);
-                AppendLog("Audio Mastering complete.");
-            }
+            if (updated != null) await BindProjectAsync(updated);
         }
         catch (Exception ex)
         {
@@ -1453,10 +1684,7 @@ public partial class MainWindow : Window
         try
         {
             double ts = Math.Max(0.0, SliderScrub.Value);
-            var response = await _http.PostAsJsonAsync(
-                $"/api/v1/projects/{_currentProject.ProjectId}/snapshot",
-                new SnapshotRequestDto { TimestampSec = ts }
-            );
+            var response = await _http.PostAsJsonAsync($"/api/v1/projects/{_currentProject.ProjectId}/snapshot", new SnapshotRequestDto { TimestampSec = ts });
             response.EnsureSuccessStatusCode();
             var snap = await response.Content.ReadFromJsonAsync<SnapshotResponseDto>();
             if (snap != null && File.Exists(snap.SnapshotPath))
@@ -1482,15 +1710,13 @@ public partial class MainWindow : Window
             Filter = "Video Files (*.mp4;*.mov;*.mkv;*.webm)|*.mp4;*.mov;*.mkv;*.webm|All Files (*.*)|*.*",
             Title = "Select Source Video File"
         };
-        if (dlg.ShowDialog() == true)
-        {
-            TxtSourceUrl.Text = dlg.FileName;
-        }
+        if (dlg.ShowDialog() == true) TxtSourceUrl.Text = dlg.FileName;
     }
 
     private async void BtnRefreshProjects_Click(object sender, RoutedEventArgs e)
     {
         await EnsureBackendRunningAsync();
+        await RefreshCustomVoicesAsync();
         await RefreshProjectsAsync(forceReloadList: true);
     }
 
@@ -1500,10 +1726,7 @@ public partial class MainWindow : Window
         try
         {
             var proj = await _http.GetFromJsonAsync<ProjectResponseDto>($"/api/v1/projects/{selected.ProjectId}");
-            if (proj != null)
-            {
-                await BindProjectAsync(proj);
-            }
+            if (proj != null) await BindProjectAsync(proj);
         }
         catch (Exception ex)
         {

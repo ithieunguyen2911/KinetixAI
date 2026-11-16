@@ -396,6 +396,118 @@ def kinetix_apply_transition_animation(
 
 
 @mcp.tool()
+def kinetix_manage_timeline_clip(
+    project_id: str,
+    action: str = "add",
+    track_id: str = "S1",
+    label: str = "New Clip",
+    start_time: float = 0.0,
+    end_time: float = 2.0,
+    clip_id: str | None = None,
+    split_time: float | None = None,
+    render_timeline: bool = False,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Add, edit, split, clone, delete, or render clip blocks on Multi-Track Timeline (V2, V1, S1, A1, B1)."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.manage_timeline_clip(
+        project_id=project_id,
+        action=action,
+        clip_id=clip_id,
+        split_time=split_time,
+        render_timeline=render_timeline,
+        clip_data={
+            "clip_id": clip_id or "",
+            "track_id": track_id,
+            "label": label,
+            "start_time": start_time,
+            "end_time": end_time,
+            "source_start": start_time,
+            "source_end": end_time,
+        },
+    ).to_dict()
+
+
+@mcp.tool()
+def kinetix_produce_podcast(
+    project_id: str,
+    raw_content: str,
+    genre: str = "podcast_dialogue",
+    host_voice_id: str = "vi-VN-HoaiMyNeural",
+    guest_voice_id: str = "vi-VN-NamMinhNeural",
+    bgm_volume: float = 0.14,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Generate a multi-voice expressive Podcast/Storytelling MP4 from text script & genre."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.generate_project_podcast(
+        project_id=project_id,
+        raw_content=raw_content,
+        genre=genre,
+        host_voice_id=host_voice_id,
+        guest_voice_id=guest_voice_id,
+        bgm_volume=bgm_volume,
+    ).to_dict()
+
+
+@mcp.tool()
+def kinetix_design_voice(
+    name: str,
+    prompt_description: str,
+    seed: int = 42,
+    language: str = "vi-VN",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Design a custom synthetic VoiceProfile from natural-language description and seed (VoiceStudio pattern)."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.design_custom_voice(
+        name=name,
+        prompt_description=prompt_description,
+        seed=seed,
+        language=language,
+    )
+
+
+@mcp.tool()
+def kinetix_clone_voice(
+    name: str,
+    reference_audio_path: str,
+    consent_verified: bool = False,
+    language: str = "vi-VN",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Consent-gated Voice Cloning from clean reference audio file (requires consent_verified=True)."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.clone_custom_voice(
+        name=name,
+        reference_audio_path=reference_audio_path,
+        consent_verified=consent_verified,
+        language=language,
+    )
+
+
+@mcp.tool()
+def kinetix_dub_video(
+    project_id: str,
+    target_language: str = "vi-VN",
+    voice_id: str = "vi-VN-HoaiMyNeural",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Dub an existing video project into target_language with time-aligned speech synthesis."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.dub_project_video(
+        project_id=project_id,
+        target_language=target_language,
+        voice_id=voice_id,
+    ).to_dict()
+
+
+@mcp.tool()
 def kinetix_update_subtitles(
     project_id: str,
     subtitles_input: str,

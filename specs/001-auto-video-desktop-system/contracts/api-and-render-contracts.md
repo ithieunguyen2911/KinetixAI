@@ -21,3 +21,9 @@
 | `POST` | `/api/v1/projects/{id}/sound-library` | Mix curated BGM preset and/or insert timestamped SFX cue |
 | `POST` | `/api/v1/projects/{id}/fx-motion` | Apply `transition_preset` and `animation_preset` via FFmpeg + Motion Engines |
 | `POST` | `/api/v1/projects/{id}/beat-cut` | Generate BPM beat grid (`.beats.json`), align subtitles to beats, and apply pulse FX |
+| `POST` | `/api/v1/projects/{id}/timeline-clips` | Add, Update, Split, Clone, Delete, or Render interactive Multi-Track Timeline clips |
+| `POST` | `/api/v1/projects/{id}/podcast` | Generate multi-voice expressive Podcast/Storytelling MP4 across 6 genres |
+| `POST` | `/api/v1/projects/{id}/dubbing` | Time-aligned AI Video Dubbing into target language |
+| `POST` | `/api/v1/voices/design` | Design synthetic VoiceProfile from prompt description & seed |
+| `POST` | `/api/v1/voices/clone` | Consent-gated Voice Cloning from clean reference audio |
+| `GET` | `/api/v1/voices/profiles` | List all built-in + custom designed/cloned VoiceProfiles |

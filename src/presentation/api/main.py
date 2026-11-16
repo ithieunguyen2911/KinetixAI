@@ -19,12 +19,15 @@ from src.presentation.schemas.project_schemas import (
     ColorGradeRequest,
     ConcatClipsRequest,
     CreateProjectRequest,
+    DubbingRequest,
     FxMotionRequest,
     HealthResponse,
     InspectSourceRequest,
     ManageCharacterRequest,
     ManageSceneRequest,
+    ManageTimelineClipRequest,
     MixAudioRequest,
+    PodcastRequest,
     ProjectResponse,
     ReframeRequest,
     SceneContextSchema,
@@ -33,6 +36,8 @@ from src.presentation.schemas.project_schemas import (
     SpeedChangeRequest,
     SplitVideoRequest,
     UpdateSubtitlesRequest,
+    VoiceCloneRequest,
+    VoiceDesignRequest,
     VoiceoverRequest,
 )
 
@@ -171,6 +176,11 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 "kinetix_apply_sound_library",
                 "kinetix_apply_beat_cut",
                 "kinetix_apply_transition_animation",
+                "kinetix_manage_timeline_clip",
+                "kinetix_produce_podcast",
+                "kinetix_design_voice",
+                "kinetix_clone_voice",
+                "kinetix_dub_video",
                 "kinetix_inspect_source",
                 "kinetix_launch_desktop_app",
                 "kinetix_health_check",
@@ -180,6 +190,34 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
     @app.get("/api/v1/catalog/studio")
     def get_studio_catalog() -> Dict[str, Any]:
         return service.get_studio_catalog()
+
+    @app.get("/api/v1/voices/profiles")
+    def list_voice_profiles() -> List[Dict[str, Any]]:
+        return service.voice_synthesizer.list_voices()
+
+    @app.post("/api/v1/voices/design")
+    def design_custom_voice(request: VoiceDesignRequest) -> Dict[str, Any]:
+        try:
+            return service.design_custom_voice(
+                name=request.name,
+                prompt_description=request.prompt_description,
+                seed=request.seed,
+                language=request.language,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/voices/clone")
+    def clone_custom_voice(request: VoiceCloneRequest) -> Dict[str, Any]:
+        try:
+            return service.clone_custom_voice(
+                name=request.name,
+                reference_audio_path=request.reference_audio_path,
+                consent_verified=request.consent_verified,
+                language=request.language,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/v1/projects/{project_id}", response_model=ProjectResponse)
     def get_project(project_id: str) -> ProjectResponse:
@@ -449,6 +487,55 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 bpm=request.bpm,
                 align_subtitles=request.align_subtitles,
                 pulse_flash=request.pulse_flash,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/timeline-clips", response_model=ProjectResponse)
+    def manage_timeline_clips(project_id: str, request: ManageTimelineClipRequest) -> ProjectResponse:
+        try:
+            updated = service.manage_timeline_clip(
+                project_id=project_id,
+                action=request.action,
+                clip_data=request.clip.model_dump() if request.clip else None,
+                clip_id=request.clip_id,
+                split_time=request.split_time,
+                render_timeline=request.render_timeline,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/podcast", response_model=ProjectResponse)
+    def generate_podcast(project_id: str, request: PodcastRequest) -> ProjectResponse:
+        try:
+            updated = service.generate_project_podcast(
+                project_id=project_id,
+                raw_content=request.raw_content,
+                genre=request.genre,
+                host_voice_id=request.host_voice_id,
+                guest_voice_id=request.guest_voice_id,
+                bgm_volume=request.bgm_volume,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/dubbing", response_model=ProjectResponse)
+    def dub_video(project_id: str, request: DubbingRequest) -> ProjectResponse:
+        try:
+            updated = service.dub_project_video(
+                project_id=project_id,
+                target_language=request.target_language,
+                voice_id=request.voice_id,
+                translated_lines=request.translated_lines,
             )
             return ProjectResponse(**updated.to_dict())
         except KeyError as exc:

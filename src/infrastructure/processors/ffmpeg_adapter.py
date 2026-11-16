@@ -511,7 +511,7 @@ class FfmpegAdapter(IVideoProcessor):
         audio_path: Path,
         output_path: Path,
     ) -> Path:
-        """Replace the active audio stream of video_path with spoken voiceover audio_path."""
+        """Replace the active audio stream of video_path with spoken voiceover audio_path, extending video if audio is longer."""
         if not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
         if not audio_path.exists():
@@ -519,29 +519,61 @@ class FfmpegAdapter(IVideoProcessor):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         staging_path = output_path.with_name(f".staging_voice_{output_path.name}")
 
-        probe = self.probe_media(video_path)
-        dur = max(2.0, float(probe.get("duration_seconds") or 6.0))
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(video_path),
-            "-i",
-            str(audio_path),
-            "-filter_complex",
-            f"[1:a]apad=whole_dur={dur:.2f}[aout]",
-            "-map",
-            "0:v:0",
-            "-map",
-            "[aout]",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-t",
-            f"{dur:.2f}",
-            str(staging_path),
-        ]
+        v_probe = self.probe_media(video_path)
+        a_probe = self.probe_media(audio_path)
+        v_dur = max(2.0, float(v_probe.get("duration_seconds") or 6.0))
+        a_dur = max(1.0, float(a_probe.get("duration_seconds") or v_dur))
+        target_dur = max(v_dur, a_dur)
+
+        if a_dur > v_dur + 0.15:
+            pad_sec = a_dur - v_dur + 0.2
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-i",
+                str(audio_path),
+                "-filter_complex",
+                f"[0:v]tpad=stop_mode=clone:stop_duration={pad_sec:.2f}[vout];[1:a]apad=whole_dur={target_dur:.2f}[aout]",
+                "-map",
+                "[vout]",
+                "-map",
+                "[aout]",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "ultrafast",
+                "-c:a",
+                "aac",
+                "-t",
+                f"{target_dur:.2f}",
+                str(staging_path),
+            ]
+        else:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-i",
+                str(audio_path),
+                "-filter_complex",
+                f"[1:a]apad=whole_dur={v_dur:.2f}[aout]",
+                "-map",
+                "0:v:0",
+                "-map",
+                "[aout]",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-t",
+                f"{v_dur:.2f}",
+                str(staging_path),
+            ]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return self._safe_finalize_output(staging_path, output_path)
 

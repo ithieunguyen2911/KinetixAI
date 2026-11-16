@@ -6,6 +6,7 @@ from src.domain.entities.enums import (
     ColorLookPreset,
     JobStatus,
     RenderEngineType,
+    StorytellingGenre,
     TemplatePreset,
     TransitionPreset,
 )
@@ -15,8 +16,11 @@ from src.domain.entities.render_job import RenderJob
 from src.domain.entities.studio_entities import (
     AuditLogEntry,
     CharacterProfile,
+    PodcastTurn,
     SceneContext,
     StoryScene,
+    TimelineClip,
+    VoiceProfile,
 )
 from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.domain.entities.video_project import VideoProject
@@ -29,11 +33,15 @@ __all__ = [
     "TemplatePreset",
     "TransitionPreset",
     "AnimationPreset",
+    "StorytellingGenre",
     "ColorGradeSpec",
     "SceneContext",
     "CharacterProfile",
     "StoryScene",
     "AuditLogEntry",
+    "TimelineClip",
+    "VoiceProfile",
+    "PodcastTurn",
     "WordTimestamp",
     "SubtitleSegment",
     "MediaAsset",
