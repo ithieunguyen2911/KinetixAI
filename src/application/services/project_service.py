@@ -1,20 +1,37 @@
 """ProjectService - Application Service coordinating projects, repositories, and AutoVideoPipeline."""
 
+from copy import deepcopy
 from pathlib import Path
+import shutil
 from typing import Any, Dict, List
+import uuid
 
 from src.application.factories.renderer_factory import RendererFactory
 from src.application.pipelines.auto_video_pipeline import AutoVideoPipeline
-from src.domain.entities.enums import JobStatus, RenderEngineType
+from src.domain.entities.enums import (
+    AnimationPreset,
+    JobStatus,
+    RenderEngineType,
+    TransitionPreset,
+)
+from src.domain.entities.studio_entities import (
+    CharacterProfile,
+    SceneContext,
+    StoryScene,
+)
 from src.domain.entities.subtitle_segment import SubtitleSegment
 from src.domain.entities.video_project import VideoProject
+from src.domain.interfaces.audio_library import IAudioAssetLibrary
 from src.domain.interfaces.media_downloader import IMediaDownloader
 from src.domain.interfaces.transcriber import ITranscriber
 from src.domain.interfaces.video_processor import IVideoProcessor
+from src.domain.interfaces.voice_synthesizer import IVoiceSynthesizer
+from src.infrastructure.audio.audio_library_adapter import StudioAudioLibraryAdapter
 from src.infrastructure.downloaders.ytdlp_adapter import YtDlpAdapter
 from src.infrastructure.processors.ffmpeg_adapter import FfmpegAdapter
 from src.infrastructure.repositories.json_project_repository import JsonProjectRepository
 from src.infrastructure.transcribers.whisper_adapter import WhisperAdapter
+from src.infrastructure.tts.tts_voice_adapter import TtsVoiceAdapter
 
 
 class ProjectService:
@@ -26,6 +43,8 @@ class ProjectService:
         downloader: IMediaDownloader | None = None,
         processor: IVideoProcessor | None = None,
         transcriber: ITranscriber | None = None,
+        voice_synthesizer: IVoiceSynthesizer | None = None,
+        audio_library: IAudioAssetLibrary | None = None,
     ) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         self.workspace_root = workspace_root or (repo_root / "workspace")
@@ -34,6 +53,8 @@ class ProjectService:
         self.downloader = downloader or YtDlpAdapter()
         self.processor = processor or FfmpegAdapter()
         self.transcriber = transcriber or WhisperAdapter()
+        self.voice_synthesizer = voice_synthesizer or TtsVoiceAdapter()
+        self.audio_library = audio_library or StudioAudioLibraryAdapter()
 
     def inspect_source(self, source_url: str) -> Dict[str, Any]:
         """Inspect remote URL or local media file metadata via IMediaDownloader.extract_metadata."""
@@ -135,6 +156,9 @@ class ProjectService:
         props = {
             "project_id": project.project_id,
             "engine": project.engine_type.value,
+            "animation_preset": project.animation_preset,
+            "scene_context": project.scene_context.to_dict(),
+            "characters": [c.to_dict() for c in project.characters],
             "duration_seconds": raw_duration,
             "subtitles": [s.to_dict() for s in project.subtitles],
         }
@@ -160,6 +184,11 @@ class ProjectService:
         project.status = JobStatus.COMPLETED
         project.progress_percent = 100
         project.current_step = "Completed: Updated MP4 exported"
+        project.append_log(
+            "SUBTITLE",
+            "Re-Render Subtitles",
+            f"Updated {len(project.subtitles)} cues ({project.engine_type.value} / {project.template_id}).",
+        )
         return self.repository.save(project)
 
     def probe_project_media(self, project_id: str) -> Dict[str, Any]:
@@ -224,6 +253,7 @@ class ProjectService:
         actual = self.processor.change_speed(project.final_output_path, target, speed_factor)
         project.final_output_path = actual
         project.current_step = f"Speed Adjusted ({speed_factor:.2f}x)"
+        project.append_log("NLE", "Speed Ramp", f"Adjusted playback speed to {speed_factor:.2f}x.")
         return self.repository.save(project)
 
     def apply_project_color_grade(
@@ -252,6 +282,11 @@ class ProjectService:
         )
         project.final_output_path = actual
         project.current_step = f"Color Graded ({preset})"
+        project.append_log(
+            "COLOR",
+            f"Color Grade ({preset})",
+            f"B={brightness:.2f}, C={contrast:.2f}, S={saturation:.2f}",
+        )
         return self.repository.save(project)
 
     def reframe_project_video(self, project_id: str, aspect_ratio: str = "16:9") -> VideoProject:
@@ -265,6 +300,7 @@ class ProjectService:
         actual = self.processor.reframe_aspect_ratio(project.final_output_path, target, aspect_ratio)
         project.final_output_path = actual
         project.current_step = f"Reframed ({aspect_ratio})"
+        project.append_log("NLE", "Aspect Reframe", f"Converted frame geometry to {aspect_ratio}.")
         return self.repository.save(project)
 
     def master_project_audio(
@@ -312,6 +348,7 @@ class ProjectService:
         project.final_output_path = current_video
         summary = " + ".join(steps_applied) if steps_applied else "Audio Inspected"
         project.current_step = f"Audio Mastered: {summary}"
+        project.append_log("AUDIO", "Audio Master", summary)
         return self.repository.save(project)
 
     def capture_project_snapshot(self, project_id: str, timestamp_sec: float = 1.0) -> Dict[str, Any]:
@@ -323,6 +360,8 @@ class ProjectService:
         snap_name = f"{project.project_id}_frame_{int(timestamp_sec * 100):05d}.png"
         snap_path = project_dir / snap_name
         out_img = self.processor.capture_snapshot(project.final_output_path, timestamp_sec, snap_path)
+        project.append_log("NLE", "Snapshot PNG", f"Captured frame at {timestamp_sec:.2f}s -> {out_img.name}")
+        self.repository.save(project)
         return {
             "project_id": project.project_id,
             "timestamp_sec": round(float(timestamp_sec), 3),
@@ -450,3 +489,338 @@ class ProjectService:
 
     def list_projects(self) -> List[VideoProject]:
         return self.repository.list_all()
+
+    # ==========================================================
+    # v3.0 STUDIO CRUD, CLONE, CONTEXT, CHARACTER, AUDIO & BEAT
+    # ==========================================================
+
+    def get_studio_catalog(self) -> Dict[str, Any]:
+        """Return all curated voices, BGM beds, SFX cues, transitions, and animations."""
+        return {
+            "voices": self.voice_synthesizer.list_voices(),
+            "bgm_presets": self.audio_library.list_bgm_presets(),
+            "sfx_presets": self.audio_library.list_sfx_presets(),
+            "transitions": [t.value for t in TransitionPreset],
+            "animations": [a.value for a in AnimationPreset],
+        }
+
+    def clone_project(self, project_id: str, new_project_id: str | None = None) -> VideoProject:
+        """Deep-clone a project (media files, subtitles, context, characters, scenes)."""
+        source = self.repository.get(project_id)
+        if not source:
+            raise KeyError(f"Project not found: {project_id}")
+
+        target_id = (new_project_id or f"{project_id}_copy_{uuid.uuid4().hex[:4]}").strip()
+        while self.repository.get(target_id):
+            target_id = f"{project_id}_copy_{uuid.uuid4().hex[:4]}"
+
+        src_dir = self.workspace_root / source.project_id
+        dst_dir = self.workspace_root / target_id
+        if src_dir.exists():
+            shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
+
+        def _remap_path(orig: Path | None) -> Path | None:
+            if not orig:
+                return None
+            if orig.exists() and src_dir in orig.parents:
+                rel = orig.relative_to(src_dir)
+                candidate = dst_dir / rel
+                return candidate if candidate.exists() else orig
+            return orig
+
+        cloned = VideoProject(
+            project_id=target_id,
+            source_url=source.source_url,
+            engine_type=source.engine_type,
+            template_id=source.template_id,
+            script_text=source.script_text,
+            raw_video_path=_remap_path(source.raw_video_path),
+            audio_path=_remap_path(source.audio_path),
+            overlay_video_path=_remap_path(source.overlay_video_path),
+            subtitles=deepcopy(source.subtitles),
+            final_output_path=_remap_path(source.final_output_path),
+            status=source.status,
+            progress_percent=source.progress_percent,
+            current_step=f"Cloned from {source.project_id}",
+            animation_preset=source.animation_preset,
+            transition_preset=source.transition_preset,
+            voice_id=source.voice_id,
+            bgm_preset=source.bgm_preset,
+            beat_timestamps=list(source.beat_timestamps),
+            scene_context=deepcopy(source.scene_context),
+            characters=deepcopy(source.characters),
+            scenes=deepcopy(source.scenes),
+            audit_logs=deepcopy(source.audit_logs),
+        )
+        cloned.append_log("PROJECT", "Clone Project", f"Cloned from '{source.project_id}' -> '{target_id}'.")
+        source.append_log("PROJECT", "Cloned Out", f"Created copy '{target_id}'.")
+        self.repository.save(source)
+        return self.repository.save(cloned)
+
+    def delete_project(self, project_id: str) -> Dict[str, Any]:
+        """Delete a project record and clean up its workspace folder."""
+        existed = self.repository.delete(project_id)
+        if not existed:
+            raise KeyError(f"Project not found: {project_id}")
+        proj_dir = self.workspace_root / project_id
+        if proj_dir.exists():
+            shutil.rmtree(proj_dir, ignore_errors=True)
+        return {"deleted": True, "project_id": project_id}
+
+    def update_scene_context(self, project_id: str, context_data: Dict[str, Any]) -> VideoProject:
+        """Update global SceneContext continuity bible."""
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+        project.scene_context = SceneContext.from_dict(context_data)
+        project.current_step = "Context Bible Updated"
+        project.append_log(
+            "CONTEXT",
+            "Update Context",
+            f"World='{project.scene_context.world_setting[:45]}', Lens='{project.scene_context.camera_lens}'",
+        )
+        return self.repository.save(project)
+
+    def manage_scene(
+        self,
+        project_id: str,
+        action: str,
+        scene_data: Dict[str, Any] | None = None,
+        scene_id: str | None = None,
+        scenes_list: List[Dict[str, Any]] | None = None,
+    ) -> VideoProject:
+        """Add, update, clone, delete, or batch-replace Storyboard Scenes."""
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+
+        act = action.strip().lower()
+        if act == "replace_all" and scenes_list is not None:
+            project.scenes = [StoryScene.from_dict(item) for item in scenes_list]
+            project.append_log("SCENE", "Batch Update Scenes", f"Saved {len(project.scenes)} storyboard scenes.")
+        elif act == "delete" and scene_id:
+            project.scenes = [s for s in project.scenes if s.scene_id != scene_id]
+            project.append_log("SCENE", "Delete Scene", f"Removed scene '{scene_id}'.")
+        elif act == "clone" and scene_id:
+            target = next((s for s in project.scenes if s.scene_id == scene_id), None)
+            if not target:
+                raise KeyError(f"Scene '{scene_id}' not found.")
+            copy_scene = StoryScene.from_dict(target.to_dict())
+            copy_scene.scene_id = f"{target.scene_id}_copy_{uuid.uuid4().hex[:3]}"
+            copy_scene.title = f"{target.title} (Copy)"
+            copy_scene.start_time = round(target.start_time + target.duration_sec, 3)
+            project.scenes.append(copy_scene)
+            project.append_log("SCENE", "Clone Scene", f"Cloned '{scene_id}' -> '{copy_scene.scene_id}'.")
+        elif scene_data:
+            new_scene = StoryScene.from_dict(scene_data)
+            idx = next((i for i, s in enumerate(project.scenes) if s.scene_id == new_scene.scene_id), None)
+            if idx is not None:
+                project.scenes[idx] = new_scene
+                project.append_log("SCENE", "Edit Scene", f"Updated '{new_scene.scene_id}' ({new_scene.title}).")
+            else:
+                project.scenes.append(new_scene)
+                project.append_log("SCENE", "Add Scene", f"Added '{new_scene.scene_id}' ({new_scene.title}).")
+
+        project.current_step = f"Storyboard Updated ({len(project.scenes)} scenes)"
+        return self.repository.save(project)
+
+    def manage_character(
+        self,
+        project_id: str,
+        action: str,
+        char_data: Dict[str, Any] | None = None,
+        character_id: str | None = None,
+        characters_list: List[Dict[str, Any]] | None = None,
+    ) -> VideoProject:
+        """Add, update, clone, delete, or batch-replace Consistent Character profiles."""
+        project = self.repository.get(project_id)
+        if not project:
+            raise KeyError(f"Project not found: {project_id}")
+
+        act = action.strip().lower()
+        if act == "replace_all" and characters_list is not None:
+            project.characters = [CharacterProfile.from_dict(c) for c in characters_list]
+            project.append_log("CHARACTER", "Batch Update Characters", f"Saved {len(project.characters)} character profiles.")
+        elif act == "delete" and character_id:
+            project.characters = [c for c in project.characters if c.character_id != character_id]
+            project.append_log("CHARACTER", "Delete Character", f"Removed character '{character_id}'.")
+        elif act == "clone" and character_id:
+            target = next((c for c in project.characters if c.character_id == character_id), None)
+            if not target:
+                raise KeyError(f"Character '{character_id}' not found.")
+            copy_char = CharacterProfile.from_dict(target.to_dict())
+            copy_char.character_id = f"{target.character_id}_copy_{uuid.uuid4().hex[:3]}"
+            copy_char.name = f"{target.name} (Clone)"
+            project.characters.append(copy_char)
+            project.append_log("CHARACTER", "Clone Character", f"Cloned '{character_id}' -> '{copy_char.character_id}'.")
+        elif char_data:
+            new_char = CharacterProfile.from_dict(char_data)
+            idx = next((i for i, c in enumerate(project.characters) if c.character_id == new_char.character_id), None)
+            if idx is not None:
+                project.characters[idx] = new_char
+                project.append_log("CHARACTER", "Edit Character", f"Updated '{new_char.name}' ({new_char.voice_id}).")
+            else:
+                project.characters.append(new_char)
+                project.append_log("CHARACTER", "Add Character", f"Added '{new_char.name}' ({new_char.voice_id}).")
+
+        project.current_step = f"Character Roster Updated ({len(project.characters)} profiles)"
+        return self.repository.save(project)
+
+    def synthesize_project_voiceover(
+        self,
+        project_id: str,
+        text: str | None = None,
+        voice_id: str = "vi-VN-HoaiMyNeural",
+        rate: float = 1.0,
+        pitch_hz: int = 0,
+    ) -> VideoProject:
+        """Generate TTS voiceover from script/subtitles and mux it onto the project's video."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+
+        spoken_text = (
+            (text or "").strip()
+            or " . ".join(s.text for s in project.subtitles).strip()
+            or (project.script_text or "").replace("|", ". ").strip()
+            or "Kinetix Studio AI Voiceover Ready."
+        )
+        project_dir = self.workspace_root / project.project_id
+        voice_wav = project_dir / "assets" / "audio" / f"voice_{voice_id}.wav"
+        generated_wav = self.voice_synthesizer.synthesize(
+            text=spoken_text,
+            output_path=voice_wav,
+            voice_id=voice_id,
+            rate=rate,
+            pitch_hz=pitch_hz,
+        )
+        project.audio_path = generated_wav
+        project.voice_id = voice_id
+
+        voiced_video = project_dir / f"{project.project_id}_voiced.mp4"
+        project.final_output_path = self.processor.replace_audio_track(
+            project.final_output_path,
+            generated_wav,
+            voiced_video,
+        )
+        project.current_step = f"Voiceover Applied ({voice_id})"
+        project.append_log("AUDIO", "TTS Voiceover", f"Synthesized voice '{voice_id}' (rate={rate:.2f}x) -> video audio replaced.")
+        return self.repository.save(project)
+
+    def apply_project_sound_library(
+        self,
+        project_id: str,
+        bgm_preset: str | None = None,
+        bgm_volume: float = 0.18,
+        sfx_id: str | None = None,
+        sfx_timestamp: float = 0.5,
+        sfx_volume: float = 0.65,
+    ) -> VideoProject:
+        """Mix a curated BGM preset and/or insert a timestamped SFX effect onto the active video."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+
+        project_dir = self.workspace_root / project.project_id
+        audio_dir = project_dir / "assets" / "audio"
+        current_video = project.final_output_path
+        probe = self.processor.probe_media(current_video)
+        dur = float(probe.get("duration_seconds") or 6.0)
+        actions: List[str] = []
+
+        if bgm_preset and bgm_preset.strip().lower() != "none":
+            bgm_path = self.audio_library.resolve_bgm(bgm_preset, audio_dir, duration_sec=dur)
+            mixed_out = project_dir / f"{project.project_id}_bgm.mp4"
+            current_video = self.processor.mix_audio_tracks(current_video, bgm_path, mixed_out, bg_volume=bgm_volume)
+            project.bgm_preset = bgm_preset
+            actions.append(f"BGM={bgm_preset} ({int(bgm_volume * 100)}%)")
+
+        if sfx_id and sfx_id.strip().lower() != "none":
+            sfx_path = self.audio_library.resolve_sfx(sfx_id, audio_dir)
+            sfx_out = project_dir / f"{project.project_id}_sfx.mp4"
+            current_video = self.processor.insert_sfx_track(
+                current_video,
+                sfx_path,
+                sfx_out,
+                timestamp_sec=sfx_timestamp,
+                volume=sfx_volume,
+            )
+            actions.append(f"SFX={sfx_id}@{sfx_timestamp:.2f}s")
+
+        project.final_output_path = current_video
+        summary = " + ".join(actions) if actions else "Sound Library Checked"
+        project.current_step = f"Audio Studio: {summary}"
+        project.append_log("AUDIO", "Sound Library", summary)
+        return self.repository.save(project)
+
+    def apply_project_fx_motion(
+        self,
+        project_id: str,
+        transition_preset: str = "fade_black",
+        animation_preset: str = "spring_pop",
+    ) -> VideoProject:
+        """Apply transition & camera/overlay animation presets onto the project's video."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+
+        project_dir = self.workspace_root / project.project_id
+        project.transition_preset = transition_preset
+        project.animation_preset = animation_preset
+
+        fx_out = project_dir / f"{project.project_id}_fx.mp4"
+        project.final_output_path = self.processor.apply_transition_and_animation(
+            project.final_output_path,
+            fx_out,
+            transition_preset=transition_preset,
+            animation_preset=animation_preset,
+        )
+        project.current_step = f"FX Motion ({transition_preset} + {animation_preset})"
+        project.append_log("FX", "Transition & Animation", f"Applied transition='{transition_preset}', animation='{animation_preset}'.")
+        return self.repository.save(project)
+
+    def apply_project_beat_cut(
+        self,
+        project_id: str,
+        bpm: int = 120,
+        align_subtitles: bool = True,
+        pulse_flash: bool = True,
+    ) -> VideoProject:
+        """Detect BPM beat grid, align subtitle cut points to beats, and apply rhythmic beat accents."""
+        project = self.repository.get(project_id)
+        if not project or not project.final_output_path or not project.final_output_path.exists():
+            raise KeyError(f"Completed video not found for project: {project_id}")
+
+        project_dir = self.workspace_root / project.project_id
+        beat_out = project_dir / f"{project.project_id}_beatcut.mp4"
+        actual_video, beats = self.processor.detect_beats_and_cut(
+            project.final_output_path,
+            beat_out,
+            bpm=bpm,
+            pulse_flash=pulse_flash,
+        )
+        project.final_output_path = actual_video
+        project.beat_timestamps = beats
+
+        if align_subtitles and project.subtitles and len(beats) >= 2:
+            def _nearest_beat(val: float) -> float:
+                return min(beats, key=lambda b: abs(b - val))
+
+            for idx, seg in enumerate(project.subtitles):
+                snapped_start = _nearest_beat(seg.start_time) if idx > 0 else 0.0
+                snapped_end = _nearest_beat(seg.end_time)
+                if snapped_end <= snapped_start + 0.25:
+                    later = [b for b in beats if b > snapped_start + 0.35]
+                    snapped_end = later[0] if later else round(snapped_start + 1.0, 3)
+                seg.start_time = round(snapped_start, 3)
+                seg.end_time = round(snapped_end, 3)
+                seg.words = []
+                seg.ensure_word_timestamps()
+
+        project.current_step = f"Beat-Cut Synced ({bpm} BPM • {len(beats)} beats)"
+        project.append_log(
+            "BEAT",
+            "Auto Beat-Cut",
+            f"Generated {len(beats)} beat markers at {bpm} BPM (align_subtitles={align_subtitles}).",
+        )
+        return self.repository.save(project)

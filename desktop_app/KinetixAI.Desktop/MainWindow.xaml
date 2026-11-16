@@ -1,9 +1,9 @@
 <Window x:Class="KinetixAI.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinetix Studio v2.0 — Professional Non-Linear Video Editor (NLE) &amp; Polyglot Automation Workstation"
-        Height="920" Width="1560"
-        MinHeight="780" MinWidth="1280"
+        Title="Kinetix Studio v3.0 — AI Storyboard, Consistent Character &amp; NLE Workstation"
+        Height="950" Width="1620"
+        MinHeight="800" MinWidth="1320"
         WindowStartupLocation="CenterScreen"
         Background="#0B0D10"
         Foreground="#F3F4F6"
@@ -25,8 +25,8 @@
             <Setter Property="CaretBrush" Value="#60A5FA"/>
             <Setter Property="BorderBrush" Value="#282E3B"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="9,6"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="11.5"/>
         </Style>
 
         <Style x:Key="StudioComboBox" TargetType="ComboBox">
@@ -34,8 +34,8 @@
             <Setter Property="Foreground" Value="#111827"/>
             <Setter Property="BorderBrush" Value="#282E3B"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="9,5"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11.5"/>
         </Style>
 
         <Style x:Key="StudioPrimaryButton" TargetType="Button">
@@ -44,9 +44,9 @@
             <Setter Property="BorderBrush" Value="#3B82F6"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Padding" Value="12,7"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -77,9 +77,9 @@
             <Setter Property="BorderBrush" Value="#2D3446"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Padding" Value="9,5"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -103,17 +103,55 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="StudioTabItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="#9CA3AF"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBd" Background="#12151C" BorderBrush="#222734" BorderThickness="1,1,1,0"
+                                CornerRadius="4,4,0,0" Padding="11,6" Margin="0,0,4,0">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBd" Property="Background" Value="#1B202C"/>
+                                <Setter Property="Foreground" Value="#F3F4F6"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBd" Property="Background" Value="#172554"/>
+                                <Setter TargetName="TabBd" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#161A23"/>
+            <Setter Property="Foreground" Value="#9CA3AF"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="BorderBrush" Value="#232836"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="46"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="26"/>
+            <RowDefinition Height="24"/>
         </Grid.RowDefinitions>
 
         <!-- TOP NLE WORKSTATION BAR -->
-        <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,0,0,1" Padding="16,0">
+        <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,0,0,1" Padding="14,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -124,22 +162,22 @@
 
                 <!-- Brand Identity -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="8" Height="18" Background="{StaticResource AccentPrimary}" CornerRadius="2" Margin="0,0,10,0"/>
-                    <TextBlock Text="KINETIX STUDIO" FontSize="13.5" FontWeight="Bold" Foreground="#F9FAFB" VerticalAlignment="Center"/>
-                    <Border Background="#181C26" BorderBrush="#282E3D" BorderThickness="1" CornerRadius="3" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="NLE v2.0" FontSize="10.5" Foreground="#9CA3AF" FontFamily="Consolas"/>
+                    <Border Width="8" Height="18" Background="{StaticResource AccentPrimary}" CornerRadius="2" Margin="0,0,8,0"/>
+                    <TextBlock Text="KINETIX STUDIO" FontSize="13" FontWeight="Bold" Foreground="#F9FAFB" VerticalAlignment="Center"/>
+                    <Border Background="#181C26" BorderBrush="#282E3D" BorderThickness="1" CornerRadius="3" Padding="6,2" Margin="7,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="v3.0 NLE" FontSize="10" Foreground="#60A5FA" FontFamily="Consolas" FontWeight="Bold"/>
                     </Border>
                 </StackPanel>
 
-                <!-- Quick Format & Speed Bar -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
-                    <TextBlock Text="ASPECT:" FontSize="10.5" FontWeight="SemiBold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <Button x:Name="BtnAspect16x9" Content="16:9 HD" Click="BtnAspect16x9_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="11" Margin="0,0,4,0"/>
-                    <Button x:Name="BtnAspect9x16" Content="9:16 Shorts" Click="BtnAspect9x16_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="11" Margin="0,0,4,0"/>
-                    <Button x:Name="BtnAspect1x1" Content="1:1 Square" Click="BtnAspect1x1_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="11" Margin="0,0,16,0"/>
+                <!-- Format, Speed, Transition & Motion FX Quick Deck -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Text="ASPECT:" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <Button x:Name="BtnAspect16x9" Content="16:9" Click="BtnAspect16x9_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,3" FontSize="10.5" Margin="0,0,3,0"/>
+                    <Button x:Name="BtnAspect9x16" Content="9:16" Click="BtnAspect9x16_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,3" FontSize="10.5" Margin="0,0,3,0"/>
+                    <Button x:Name="BtnAspect1x1" Content="1:1" Click="BtnAspect1x1_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,3" FontSize="10.5" Margin="0,0,10,0"/>
 
-                    <TextBlock Text="SPEED:" FontSize="10.5" FontWeight="SemiBold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <ComboBox x:Name="CmbSpeedFactor" Width="76" SelectedIndex="2" Style="{StaticResource StudioComboBox}" Padding="6,3" FontSize="11" Margin="0,0,6,0">
+                    <TextBlock Text="SPEED:" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <ComboBox x:Name="CmbSpeedFactor" Width="64" SelectedIndex="2" Style="{StaticResource StudioComboBox}" Padding="4,2" FontSize="10.5" Margin="0,0,4,0">
                         <ComboBoxItem Content="0.50x" Tag="0.5"/>
                         <ComboBoxItem Content="0.75x" Tag="0.75"/>
                         <ComboBoxItem Content="1.00x" Tag="1.0"/>
@@ -147,40 +185,61 @@
                         <ComboBoxItem Content="1.50x" Tag="1.5"/>
                         <ComboBoxItem Content="2.00x" Tag="2.0"/>
                     </ComboBox>
-                    <Button x:Name="BtnApplySpeed" Content="Apply Speed" Click="BtnApplySpeed_Click" Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11"/>
+                    <Button x:Name="BtnApplySpeed" Content="Speed" Click="BtnApplySpeed_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,3" FontSize="10.5" Margin="0,0,10,0"/>
+
+                    <TextBlock Text="TRANSITION:" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <ComboBox x:Name="CmbTransitionPreset" Width="106" SelectedIndex="1" Style="{StaticResource StudioComboBox}" Padding="5,2" FontSize="10.5" Margin="0,0,6,0">
+                        <ComboBoxItem Content="none" Tag="none"/>
+                        <ComboBoxItem Content="fade_black" Tag="fade_black"/>
+                        <ComboBoxItem Content="cross_dissolve" Tag="cross_dissolve"/>
+                        <ComboBoxItem Content="wipe_left" Tag="wipe_left"/>
+                        <ComboBoxItem Content="slide_up" Tag="slide_up"/>
+                        <ComboBoxItem Content="glitch_flash" Tag="glitch_flash"/>
+                    </ComboBox>
+
+                    <TextBlock Text="ANIM:" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <ComboBox x:Name="CmbAnimationPreset" Width="122" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Padding="5,2" FontSize="10.5" Margin="0,0,5,0">
+                        <ComboBoxItem Content="spring_pop" Tag="spring_pop"/>
+                        <ComboBoxItem Content="ken_burns_zoom" Tag="ken_burns_zoom"/>
+                        <ComboBoxItem Content="typewriter_reveal" Tag="typewriter_reveal"/>
+                        <ComboBoxItem Content="neon_glow_pulse" Tag="neon_glow_pulse"/>
+                        <ComboBoxItem Content="slide_up_bounce" Tag="slide_up_bounce"/>
+                        <ComboBoxItem Content="camera_shake_impact" Tag="camera_shake_impact"/>
+                    </ComboBox>
+                    <Button x:Name="BtnApplyFxMotion" Content="Apply FX" Click="BtnApplyFxMotion_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5"/>
                 </StackPanel>
 
                 <!-- Right System Telemetry & MCP Status -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="#141821" BorderBrush="#252B3B" BorderThickness="1" CornerRadius="4" Padding="9,4" Margin="0,0,8,0">
+                    <Border Background="#141821" BorderBrush="#252B3B" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,6,0">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="7" Height="7" Fill="#3B82F6" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock x:Name="TxtMcpStatus" Text="MCP: kinetix-ai (14 Tools)" FontSize="11" Foreground="#D1D5DB"/>
+                            <Ellipse Width="7" Height="7" Fill="#3B82F6" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="TxtMcpStatus" Text="MCP: 22 Tools" FontSize="10.5" Foreground="#D1D5DB"/>
                         </StackPanel>
                     </Border>
-                    <Border Background="#141821" BorderBrush="#252B3B" BorderThickness="1" CornerRadius="4" Padding="9,4" Margin="0,0,8,0">
+                    <Border Background="#141821" BorderBrush="#252B3B" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,6,0">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="DotBackend" Width="7" Height="7" Fill="#10B981" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock x:Name="TxtBackendStatus" Text="Core API: Online" FontSize="11" Foreground="#D1D5DB"/>
+                            <Ellipse x:Name="DotBackend" Width="7" Height="7" Fill="#10B981" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="TxtBackendStatus" Text="Core API: Online" FontSize="10.5" Foreground="#D1D5DB"/>
                         </StackPanel>
                     </Border>
-                    <Button x:Name="BtnRefreshProjects" Content="Sync Workspace" Click="BtnRefreshProjects_Click"
-                            Style="{StaticResource StudioSecondaryButton}" Padding="10,4" FontSize="11"/>
+                    <Button x:Name="BtnRefreshProjects" Content="Sync" Click="BtnRefreshProjects_Click"
+                            Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="10.5"/>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- MAIN 3-COLUMN NLE WORKSPACE -->
-        <Grid Grid.Row="1" Margin="10">
+        <Grid Grid.Row="1" Margin="8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320"/>
-                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="312"/>
+                <ColumnDefinition Width="8"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="355"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="346"/>
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT DOCK: PROJECT INGEST, MOTION TEMPLATE & WORKSPACE BIN -->
+            <!-- LEFT DOCK: PROJECT INGEST, MOTION TEMPLATE & WORKSPACE BIN (WITH CLONE & DELETE) -->
             <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -189,22 +248,22 @@
                 </Grid.RowDefinitions>
 
                 <!-- Ingest & Template Configuration -->
-                <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="14">
+                <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12">
                     <StackPanel>
-                        <TextBlock Text="MEDIA INGEST &amp; MOTION ENGINE" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" Margin="0,0,0,10"/>
+                        <TextBlock Text="MEDIA INGEST &amp; MOTION ENGINE" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" Margin="0,0,0,8"/>
 
-                        <Grid Margin="0,0,0,8">
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="118"/>
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="112"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="Project Identifier" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,3"/>
-                                <TextBox x:Name="TxtProjectId" Text="studio_master_01" Style="{StaticResource StudioTextBox}"/>
+                                <TextBlock Text="Project Identifier" Foreground="#9CA3AF" FontSize="10.5" Margin="0,0,0,2"/>
+                                <TextBox x:Name="TxtProjectId" Text="studio_master_v3" Style="{StaticResource StudioTextBox}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2">
-                                <TextBlock Text="Render Engine" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,3"/>
+                                <TextBlock Text="Render Engine" Foreground="#9CA3AF" FontSize="10.5" Margin="0,0,0,2"/>
                                 <ComboBox x:Name="CmbEngineType" SelectedIndex="0" Style="{StaticResource StudioComboBox}">
                                     <ComboBoxItem Content="remotion" Tag="remotion"/>
                                     <ComboBoxItem Content="hyperframes" Tag="hyperframes"/>
@@ -212,71 +271,79 @@
                             </StackPanel>
                         </Grid>
 
-                        <TextBlock Text="Motion Graphics Template (Remotion &amp; HyperFrames)" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,3"/>
-                        <ComboBox x:Name="CmbTemplateId" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,8">
+                        <TextBlock Text="Motion Graphics Template (Remotion &amp; HyperFrames)" Foreground="#9CA3AF" FontSize="10.5" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="CmbTemplateId" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,6">
                             <ComboBoxItem Content="CaptionTemplate" Tag="CaptionTemplate"/>
                             <ComboBoxItem Content="KineticTitleCard" Tag="KineticTitleCard"/>
                             <ComboBoxItem Content="SocialPopCaptions" Tag="SocialPopCaptions"/>
                             <ComboBoxItem Content="TechCalloutHUD" Tag="TechCalloutHUD"/>
                         </ComboBox>
 
-                        <TextBlock Text="Source Input (URL, Local File, or demo://sample)" Foreground="#9CA3AF" FontSize="11" Margin="0,0,0,3"/>
-                        <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Source Input (URL, File Path, or demo://sample)" Foreground="#9CA3AF" FontSize="10.5" Margin="0,0,0,2"/>
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="5"/>
+                                <ColumnDefinition Width="4"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="5"/>
+                                <ColumnDefinition Width="4"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="TxtSourceUrl" Text="demo://sample" Style="{StaticResource StudioTextBox}"/>
                             <Button x:Name="BtnInspectSource" Grid.Column="2" Content="Inspect" Click="BtnInspectSource_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="8,6" FontSize="11"/>
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="7,5" FontSize="10.5"/>
                             <Button x:Name="BtnBrowseFile" Grid.Column="4" Content="Browse" Click="BtnBrowseFile_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="8,6" FontSize="11"/>
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="7,5" FontSize="10.5"/>
                         </Grid>
 
-                        <Grid Margin="0,0,0,3">
+                        <Grid Margin="0,0,0,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Script / Captions (blank = Auto-Whisper)" Foreground="#9CA3AF" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Text="Script / Captions (blank = Auto-Whisper)" Foreground="#9CA3AF" FontSize="10.5" VerticalAlignment="Center"/>
                             <Button x:Name="BtnClearScript" Grid.Column="1" Content="Auto-Whisper (Clear)" Click="BtnClearScript_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10"/>
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="6,2" FontSize="9.5"/>
                         </Grid>
                         <TextBox x:Name="TxtScriptText"
-                                 Text="Kinetix Studio NLE Workstation|Powered by Remotion, HyperFrames &amp; FFmpeg|Clean Architecture + GitHub Spec Kit"
+                                 Text="Kinetix Studio v3.0 Storyboard|Consistent Characters &amp; Voiceover|Beat-Cut Sync + Full NLE FX"
                                  Style="{StaticResource StudioTextBox}"
-                                 AcceptsReturn="True" TextWrapping="Wrap" Height="56" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10"/>
+                                 AcceptsReturn="True" TextWrapping="Wrap" Height="50" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8"/>
 
                         <Button x:Name="BtnRunPipeline" Content="Execute 5-Step Production Pipeline" Click="BtnRunPipeline_Click"
-                                Style="{StaticResource StudioPrimaryButton}" Margin="0,0,0,6"/>
+                                Style="{StaticResource StudioPrimaryButton}" Margin="0,0,0,5"/>
 
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="5"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Button x:Name="BtnRerenderSubtitles" Grid.Column="0" Content="Re-Render Overlay" Click="BtnRerenderSubtitles_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="8,6"/>
-                            <Button x:Name="BtnOpenFolder" Grid.Column="2" Content="Reveal in Explorer" Click="BtnOpenFolder_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="8,6"/>
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="6,5" FontSize="11"/>
+                            <Button x:Name="BtnOpenFolder" Grid.Column="2" Content="Reveal Folder" Click="BtnOpenFolder_Click"
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="6,5" FontSize="11"/>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <!-- Media Bin / Workspace Projects -->
-                <Border Grid.Row="2" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="14,10">
+                <!-- Media Bin / Workspace Projects with Clone & Delete -->
+                <Border Grid.Row="2" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,9">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="MEDIA BIN / WORKSPACE PROJECTS" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF"/>
-                            <TextBlock x:Name="TxtProjectCount" Text="0 items" FontSize="10.5" Foreground="#6B7280" HorizontalAlignment="Right"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="PROJECTS BIN" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtProjectCount" Text=" (0)" FontSize="10" Foreground="#6B7280" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button x:Name="BtnCloneProject" Content="Clone" Click="BtnCloneProject_Click"
+                                        Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10" Margin="0,0,4,0"/>
+                                <Button x:Name="BtnDeleteProject" Content="Delete" Click="BtnDeleteProject_Click"
+                                        Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10"/>
+                            </StackPanel>
                         </Grid>
                         <ListBox x:Name="LstProjects" Grid.Row="1"
                                  Background="#0D0F13" BorderBrush="#222631" BorderThickness="1"
@@ -284,7 +351,7 @@
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="10,7"/>
+                                    <Setter Property="Padding" Value="8,6"/>
                                     <Setter Property="Margin" Value="2"/>
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                     <Setter Property="Template">
@@ -316,11 +383,11 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
-                                            <TextBlock Text="{Binding ProjectId}" FontWeight="SemiBold" FontSize="12" Foreground="#F3F4F6" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding CurrentStep}" FontSize="10.5" Foreground="#9CA3AF" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                            <TextBlock Text="{Binding ProjectId}" FontWeight="SemiBold" FontSize="11.5" Foreground="#F3F4F6" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding CurrentStep}" FontSize="10" Foreground="#9CA3AF" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
                                         </StackPanel>
-                                        <Border Grid.Column="1" Background="#1E2433" BorderBrush="#313A50" BorderThickness="1" CornerRadius="3" Padding="6,2" VerticalAlignment="Center" Margin="6,0,0,0">
-                                            <TextBlock Text="{Binding EngineUpper}" FontSize="9.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#93C5FD"/>
+                                        <Border Grid.Column="1" Background="#1E2433" BorderBrush="#313A50" BorderThickness="1" CornerRadius="3" Padding="5,2" VerticalAlignment="Center" Margin="4,0,0,0">
+                                            <TextBlock Text="{Binding EngineUpper}" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#93C5FD"/>
                                         </Border>
                                     </Grid>
                                 </DataTemplate>
@@ -330,18 +397,18 @@
                 </Border>
             </Grid>
 
-            <!-- CENTER DOCK: PROGRAM MONITOR + VISUAL MULTI-TRACK NLE TIMELINE + SUBTITLE CUE EDITOR -->
+            <!-- CENTER DOCK: PROGRAM MONITOR + 5-TRACK BEAT TIMELINE + 5-TAB STUDIO WORKSTATION -->
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="295"/>
+                    <RowDefinition Height="260"/>
                     <RowDefinition Height="8"/>
-                    <RowDefinition Height="186"/>
+                    <RowDefinition Height="195"/>
                     <RowDefinition Height="8"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                 <!-- 1. PROGRAM VIDEO MONITOR & NLE TRANSPORT DECK -->
-                <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,10">
+                <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="10,8">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -349,130 +416,123 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid Grid.Row="0" Margin="0,0,0,4">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="PROGRAM MONITOR" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TxtOutputPath" Text="" FontSize="10.5" Foreground="#6B7280" FontFamily="Consolas" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+                                <TextBlock Text="PROGRAM MONITOR" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtOutputPath" Text="" FontSize="10" Foreground="#6B7280" FontFamily="Consolas" Margin="10,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
                             </StackPanel>
-                            <TextBlock x:Name="TxtTimecode" Text="00.00s / 06.00s" FontSize="11.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Right"/>
+                            <TextBlock x:Name="TxtTimecode" Text="00.00s / 06.00s" FontSize="11" FontFamily="Consolas" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <!-- 16:9 Dark Studio Video Viewport -->
                         <Border Grid.Row="1" Background="#050608" BorderBrush="#1F2430" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
                             <Grid>
                                 <TextBlock x:Name="TxtVideoPlaceholder"
                                            Text="No active video loaded in monitor. Select a project or execute pipeline."
-                                           Foreground="#6B7280" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                           Foreground="#6B7280" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 <MediaElement x:Name="VideoPlayer" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
                                               MediaOpened="VideoPlayer_MediaOpened" MediaEnded="VideoPlayer_MediaEnded"/>
                             </Grid>
                         </Border>
 
-                        <!-- NLE Transport & Frame-Accurate Deck -->
-                        <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <Grid Grid.Row="2" Margin="0,6,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <Button x:Name="BtnPlayPause" Content="Play" Width="54" Click="BtnPlayPause_Click" Style="{StaticResource StudioSecondaryButton}" Padding="6,4" Margin="0,0,4,0"/>
-                                <Button x:Name="BtnStopVideo" Content="Stop" Width="48" Click="BtnStopVideo_Click" Style="{StaticResource StudioSecondaryButton}" Padding="6,4" Margin="0,0,4,0"/>
-                                <Button x:Name="BtnStepBack" Content="-1f" Width="38" ToolTip="Step Backward 1 Frame (1/30s)" Click="BtnStepBack_Click" Style="{StaticResource StudioSecondaryButton}" Padding="4,4" Margin="0,0,4,0"/>
-                                <Button x:Name="BtnStepForward" Content="+1f" Width="38" ToolTip="Step Forward 1 Frame (1/30s)" Click="BtnStepForward_Click" Style="{StaticResource StudioSecondaryButton}" Padding="4,4" Margin="0,0,8,0"/>
-                                <Button x:Name="BtnMarkIn" Content="Set In [" ToolTip="Set Trim Start to Playhead" Click="BtnMarkIn_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,4" Margin="0,0,4,0"/>
-                                <Button x:Name="BtnMarkOut" Content="Set Out ]" ToolTip="Set Trim End to Playhead" Click="BtnMarkOut_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,4" Margin="0,0,8,0"/>
+                                <Button x:Name="BtnPlayPause" Content="Play" Width="50" Click="BtnPlayPause_Click" Style="{StaticResource StudioSecondaryButton}" Padding="5,3" Margin="0,0,3,0"/>
+                                <Button x:Name="BtnStopVideo" Content="Stop" Width="46" Click="BtnStopVideo_Click" Style="{StaticResource StudioSecondaryButton}" Padding="5,3" Margin="0,0,3,0"/>
+                                <Button x:Name="BtnStepBack" Content="-1f" Width="34" Click="BtnStepBack_Click" Style="{StaticResource StudioSecondaryButton}" Padding="3,3" Margin="0,0,3,0"/>
+                                <Button x:Name="BtnStepForward" Content="+1f" Width="34" Click="BtnStepForward_Click" Style="{StaticResource StudioSecondaryButton}" Padding="3,3" Margin="0,0,6,0"/>
+                                <Button x:Name="BtnMarkIn" Content="Set In [" Click="BtnMarkIn_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,3" Margin="0,0,3,0"/>
+                                <Button x:Name="BtnMarkOut" Content="Set Out ]" Click="BtnMarkOut_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,3" Margin="0,0,6,0"/>
                             </StackPanel>
 
-                            <Slider x:Name="SliderScrub" Grid.Column="1" Minimum="0" Maximum="6" Value="0" VerticalAlignment="Center" Margin="6,0,10,0"
+                            <Slider x:Name="SliderScrub" Grid.Column="1" Minimum="0" Maximum="6" Value="0" VerticalAlignment="Center" Margin="4,0,8,0"
                                     PreviewMouseLeftButtonUp="SliderScrub_PreviewMouseLeftButtonUp"/>
 
                             <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                <Button x:Name="BtnSnapshot" Content="Snapshot PNG" ToolTip="Capture PNG Frame at Playhead" Click="BtnSnapshot_Click" Style="{StaticResource StudioSecondaryButton}" Padding="9,4" Margin="0,0,6,0"/>
-                                <Button x:Name="BtnOpenVideo" Content="External Player" Click="BtnOpenVideo_Click" Style="{StaticResource StudioSecondaryButton}" Padding="9,4"/>
+                                <Button x:Name="BtnSnapshot" Content="Snapshot PNG" Click="BtnSnapshot_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" Margin="0,0,4,0"/>
+                                <Button x:Name="BtnOpenVideo" Content="External Player" Click="BtnOpenVideo_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3"/>
                             </StackPanel>
                         </Grid>
                     </Grid>
                 </Border>
 
-                <!-- 2. VISUAL MULTI-TRACK NLE TIMELINE (V2 OVERLAY, V1 VIDEO, S1 CAPTIONS, A1 AUDIO) -->
-                <Border Grid.Row="2" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,8">
+                <!-- 2. VISUAL 5-TRACK MULTI-LAYER NLE TIMELINE (V2 OVERLAY, V1 VIDEO, S1 CAPTIONS, A1 AUDIO, B1 BEATS/SFX) -->
+                <Border Grid.Row="2" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="10,7">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="18"/>
+                            <RowDefinition Height="17"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Timeline Header -->
-                        <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <Grid Grid.Row="0" Margin="0,0,0,3">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="MULTI-TRACK NLE TIMELINE" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
-                                <TextBlock Text="  •  Click any S1 Caption block or ruler to seek Playhead" FontSize="10.5" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                <TextBlock Text="MULTI-TRACK NLE TIMELINE" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                <TextBlock Text="  •  5 Tracks Active (Overlay, Video, Captions, Audio, Beat Grid)" FontSize="10" Foreground="#6B7280" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock x:Name="TxtTimelineSummary" Text="4 Tracks Active (V2, V1, S1, A1) | 30.00 fps" FontSize="10.5" FontFamily="Consolas" Foreground="#9CA3AF" HorizontalAlignment="Right"/>
+                            <TextBlock x:Name="TxtTimelineSummary" Text="5 Tracks Active | 30.00 fps" FontSize="10" FontFamily="Consolas" Foreground="#9CA3AF" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <!-- Timecode Ruler -->
-                        <Grid Grid.Row="1" Margin="86,0,0,2" Background="#0B0D13" MouseLeftButtonDown="TimelineCanvas_MouseLeftButtonDown" Cursor="Hand">
+                        <Grid Grid.Row="1" Margin="84,0,0,2" Background="#0B0D13" MouseLeftButtonDown="TimelineCanvas_MouseLeftButtonDown" Cursor="Hand">
                             <UniformGrid Rows="1" Columns="6">
-                                <TextBlock Text="00:00.0" FontSize="9.5" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center" Margin="4,0,0,0"/>
-                                <TextBlock x:Name="TxtRuler1" Text="00:01.2" FontSize="9.5" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TxtRuler2" Text="00:02.4" FontSize="9.5" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TxtRuler3" Text="00:03.6" FontSize="9.5" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TxtRuler4" Text="00:04.8" FontSize="9.5" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TxtRuler5" Text="00:06.0" FontSize="9.5" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                <TextBlock Text="00:00.0" FontSize="9" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                <TextBlock x:Name="TxtRuler1" Text="00:01.2" FontSize="9" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtRuler2" Text="00:02.4" FontSize="9" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtRuler3" Text="00:03.6" FontSize="9" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtRuler4" Text="00:04.8" FontSize="9" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtRuler5" Text="00:06.0" FontSize="9" FontFamily="Consolas" Foreground="#6B7280" VerticalAlignment="Center"/>
                             </UniformGrid>
                         </Grid>
 
-                        <!-- 4 Track Lanes + Playhead Overlay -->
                         <Grid Grid.Row="2">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="86"/>
+                                <ColumnDefinition Width="84"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Track Headers -->
-                            <UniformGrid Grid.Column="0" Rows="4" Columns="1" Margin="0,0,4,0">
-                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="6,0">
-                                    <TextBlock Text="V2 OVERLAY" FontSize="9.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#60A5FA" VerticalAlignment="Center"/>
+                            <UniformGrid Grid.Column="0" Rows="5" Columns="1" Margin="0,0,4,0">
+                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="5,0">
+                                    <TextBlock Text="V2 OVERLAY" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#60A5FA" VerticalAlignment="Center"/>
                                 </Border>
-                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="6,0">
-                                    <TextBlock Text="V1 VIDEO" FontSize="9.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#34D399" VerticalAlignment="Center"/>
+                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="5,0">
+                                    <TextBlock Text="V1 VIDEO" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#34D399" VerticalAlignment="Center"/>
                                 </Border>
-                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="6,0">
-                                    <TextBlock Text="S1 CAPTIONS" FontSize="9.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#FBBF24" VerticalAlignment="Center"/>
+                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="5,0">
+                                    <TextBlock Text="S1 CAPTIONS" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FBBF24" VerticalAlignment="Center"/>
                                 </Border>
-                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="6,0">
-                                    <TextBlock Text="A1 AUDIO" FontSize="9.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="5,0">
+                                    <TextBlock Text="A1 AUDIO" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                </Border>
+                                <Border Background="#141822" BorderBrush="#23293A" BorderThickness="1" CornerRadius="3" Margin="0,1" Padding="5,0">
+                                    <TextBlock Text="B1 BEATS/SFX" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#38BDF8" VerticalAlignment="Center"/>
                                 </Border>
                             </UniformGrid>
 
-                            <!-- Track Content Lanes -->
                             <Grid x:Name="TimelineTrackArea" Grid.Column="1" Background="#090B10" ClipToBounds="True"
                                   SizeChanged="TimelineTrackArea_SizeChanged"
                                   MouseLeftButtonDown="TimelineCanvas_MouseLeftButtonDown" Cursor="Hand">
-                                <UniformGrid Rows="4" Columns="1">
-                                    <!-- V2 Motion Overlay Track -->
+                                <UniformGrid Rows="5" Columns="1">
                                     <Border BorderBrush="#171B26" BorderThickness="0,0,0,1" Padding="2">
                                         <Border Background="#172554" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="3" Padding="8,0">
-                                            <TextBlock x:Name="TxtTrackV2" Text="REMOTION / HYPERFRAMES OVERLAY COMPOSITION (CaptionTemplate)" FontSize="10" FontFamily="Consolas" Foreground="#BFDBFE" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="TxtTrackV2" Text="OVERLAY COMPOSITION (CaptionTemplate)" FontSize="9.5" FontFamily="Consolas" Foreground="#BFDBFE" VerticalAlignment="Center"/>
                                         </Border>
                                     </Border>
 
-                                    <!-- V1 Main Video Track -->
                                     <Border BorderBrush="#171B26" BorderThickness="0,0,0,1" Padding="2">
                                         <Border Background="#064E3B" BorderBrush="#10B981" BorderThickness="1" CornerRadius="3" Padding="8,0">
-                                            <TextBlock x:Name="TxtTrackV1" Text="MASTER VIDEO STREAM (h264 • 1280x720 • 30.00 fps)" FontSize="10" FontFamily="Consolas" Foreground="#A7F3D0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="TxtTrackV1" Text="MASTER VIDEO STREAM (h264 • 1280x720 • 30.00 fps)" FontSize="9.5" FontFamily="Consolas" Foreground="#A7F3D0" VerticalAlignment="Center"/>
                                         </Border>
                                     </Border>
 
-                                    <!-- S1 Whisper Subtitle Cues Track (Dynamic Proportional Blocks) -->
-                                    <Border BorderBrush="#171B26" BorderThickness="0,0,0,1" Padding="0,2">
+                                    <Border BorderBrush="#171B26" BorderThickness="0,0,0,1" Padding="0,1">
                                         <ItemsControl x:Name="IcTimelineSubtitles">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
-                                                    <Canvas Height="24"/>
+                                                    <Canvas Height="22"/>
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemContainerStyle>
@@ -483,30 +543,50 @@
                                             </ItemsControl.ItemContainerStyle>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border Width="{Binding WidthPx}" Height="23"
+                                                    <Border Width="{Binding WidthPx}" Height="21"
                                                             Background="#422006" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="3"
-                                                            Padding="5,0" Cursor="Hand"
+                                                            Padding="4,0" Cursor="Hand"
                                                             MouseLeftButtonDown="SubtitleTimelineBlock_MouseLeftButtonDown"
                                                             ToolTip="{Binding Label}">
-                                                        <TextBlock Text="{Binding Label}" FontSize="9.5" Foreground="#FEF3C7" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Label}" FontSize="9" Foreground="#FEF3C7" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </Border>
 
-                                    <!-- A1 Audio Stream & Waveform Track -->
-                                    <Border Padding="2">
+                                    <Border BorderBrush="#171B26" BorderThickness="0,0,0,1" Padding="2">
                                         <Border Background="#2E1065" BorderBrush="#8B5CF6" BorderThickness="1" CornerRadius="3" Padding="8,0">
-                                            <TextBlock x:Name="TxtTrackA1" Text="AUDIO STREAM  ▂▄▆█▄▂▅▇▃▂▆█▄▂▅▇▃▂▆█▄▂  (AAC / 16000Hz Speech Bandpass)" FontSize="10" FontFamily="Consolas" Foreground="#DDD6FE" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="TxtTrackA1" Text="AUDIO + VOICEOVER  ▂▄▆█▄▂▅▇▃▂▆█▄▂▅▇▃▂▆█▄▂" FontSize="9.5" FontFamily="Consolas" Foreground="#DDD6FE" VerticalAlignment="Center"/>
                                         </Border>
+                                    </Border>
+
+                                    <!-- B1 Beat Markers & SFX Grid Track -->
+                                    <Border Padding="0,1">
+                                        <ItemsControl x:Name="IcTimelineBeats">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas Height="22"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding LeftPx}"/>
+                                                    <Setter Property="Canvas.Top" Value="1"/>
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Width="8" Height="18" Background="#0C4A6E" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="2" ToolTip="{Binding Label}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </Border>
                                 </UniformGrid>
 
-                                <!-- Red Playhead Vertical Line -->
                                 <Canvas IsHitTestVisible="False">
-                                    <Border x:Name="PlayheadLine" Canvas.Left="0" Canvas.Top="0" Width="2" Height="140" Background="#EF4444">
-                                        <Border Width="10" Height="8" Background="#EF4444" CornerRadius="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="-4,0,0,0"/>
+                                    <Border x:Name="PlayheadLine" Canvas.Left="0" Canvas.Top="0" Width="2" Height="152" Background="#EF4444">
+                                        <Border Width="10" Height="7" Background="#EF4444" CornerRadius="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="-4,0,0,0"/>
                                     </Border>
                                 </Canvas>
                             </Grid>
@@ -514,48 +594,286 @@
                     </Grid>
                 </Border>
 
-                <!-- 3. SUBTITLE CUE EDITOR TABLE -->
-                <Border Grid.Row="4" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,10">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+                <!-- 3. 5-TAB STUDIO WORKSTATION (SUBTITLES, CONTEXT/SCENES, CHARACTERS, VOICE/BGM/SFX/BEAT, AUDIT LOGS) -->
+                <Border Grid.Row="4" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="10,8">
+                    <TabControl x:Name="MainStudioTabs" Background="#0D0F13" BorderBrush="#232836" BorderThickness="1" Padding="8">
 
-                        <Grid Grid.Row="0" Margin="0,0,0,8">
-                            <TextBlock Text="SUBTITLE CUE EDITOR (WHISPER WORD-LEVEL TIMESTAMPS)" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button x:Name="BtnAddSubtitleRow" Content="+ Add Cue" Click="BtnAddSubtitleRow_Click"
-                                        Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11" Margin="0,0,6,0"/>
-                                <Button x:Name="BtnSplitSubtitleCue" Content="Split Cue at Playhead" Click="BtnSplitSubtitleCue_Click"
-                                        Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11" Margin="0,0,6,0"/>
-                                <Button x:Name="BtnExportSubtitles" Content="Export SRT / VTT" Click="BtnExportSubtitles_Click"
-                                        Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11" Margin="0,0,6,0"/>
-                                <Button x:Name="BtnRemoveSubtitleRow" Content="Remove Cue" Click="BtnRemoveSubtitleRow_Click"
-                                        Style="{StaticResource StudioSecondaryButton}" Padding="9,3" FontSize="11"/>
-                            </StackPanel>
-                        </Grid>
+                        <!-- TAB 1: SUBTITLES (ADD / CLONE / SPLIT / EXPORT / REMOVE) -->
+                        <TabItem Header="PHỤ ĐỀ (SUBTITLES)" Style="{StaticResource StudioTabItem}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <TextBlock Text="SUBTITLE CUES (WHISPER WORD-LEVEL TIMESTAMPS)" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button x:Name="BtnAddSubtitleRow" Content="+ Thêm Cue" Click="BtnAddSubtitleRow_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnCloneSubtitleRow" Content="Nhân bản Cue" Click="BtnCloneSubtitleRow_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnSplitSubtitleCue" Content="Tách tại Playhead" Click="BtnSplitSubtitleCue_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnExportSubtitles" Content="Xuất SRT / VTT" Click="BtnExportSubtitles_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnRemoveSubtitleRow" Content="Xóa Cue" Click="BtnRemoveSubtitleRow_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Grid>
 
-                        <DataGrid x:Name="GridSubtitles" Grid.Row="1"
-                                  AutoGenerateColumns="False" CanUserAddRows="False"
-                                  Background="#0D0F13" Foreground="#F3F4F6"
-                                  BorderBrush="#222631" BorderThickness="1"
-                                  GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#1B1F2A"
-                                  RowBackground="#111319" AlternatingRowBackground="#151821"
-                                  HeadersVisibility="Column" RowHeaderWidth="0" SelectionMode="Single">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="IN (SEC)" Binding="{Binding StartTime, UpdateSourceTrigger=PropertyChanged}" Width="82"/>
-                                <DataGridTextColumn Header="OUT (SEC)" Binding="{Binding EndTime, UpdateSourceTrigger=PropertyChanged}" Width="82"/>
-                                <DataGridTextColumn Header="DUR" Binding="{Binding DurationDisplay}" Width="66" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="WORDS" Binding="{Binding WordCount}" Width="62" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="CAPTION DIALOGUE TEXT (EDITABLE)" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </Grid>
+                                <DataGrid x:Name="GridSubtitles" Grid.Row="1"
+                                          AutoGenerateColumns="False" CanUserAddRows="False"
+                                          Background="#0D0F13" Foreground="#F3F4F6"
+                                          BorderBrush="#222631" BorderThickness="1"
+                                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#1B1F2A"
+                                          RowBackground="#111319" AlternatingRowBackground="#151821"
+                                          HeadersVisibility="Column" RowHeaderWidth="0" SelectionMode="Single">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="IN (SEC)" Binding="{Binding StartTime, UpdateSourceTrigger=PropertyChanged}" Width="74"/>
+                                        <DataGridTextColumn Header="OUT (SEC)" Binding="{Binding EndTime, UpdateSourceTrigger=PropertyChanged}" Width="74"/>
+                                        <DataGridTextColumn Header="DUR" Binding="{Binding DurationDisplay}" Width="60" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="WORDS" Binding="{Binding WordCount}" Width="56" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="CAPTION DIALOGUE TEXT (EDITABLE)" Binding="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- TAB 2: BỐI CẢNH & PHÂN CẢNH STORYBOARD (CONTEXT BIBLE & SCENES CRUD + CLONE) -->
+                        <TabItem Header="BỐI CẢNH &amp; PHÂN CẢNH" Style="{StaticResource StudioTabItem}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="8"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Global Scene Context Form -->
+                                <Border Grid.Row="0" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="4" Padding="8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="6"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="6"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="6"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Bối cảnh thế giới (World Setting)" FontSize="9.5" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="TxtWorldSetting" Style="{StaticResource StudioTextBox}" Padding="6,4" FontSize="10.5"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Phong cách hình ảnh (Visual Style)" FontSize="9.5" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="TxtVisualStyle" Style="{StaticResource StudioTextBox}" Padding="6,4" FontSize="10.5"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="Ánh sáng &amp; Ống kính (Light / Lens)" FontSize="9.5" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="TxtLightingMood" Style="{StaticResource StudioTextBox}" Padding="6,4" FontSize="10.5"/>
+                                        </StackPanel>
+                                        <Button x:Name="BtnSaveContext" Grid.Column="6" Content="Lưu Bối Cảnh" Click="BtnSaveContext_Click"
+                                                Style="{StaticResource StudioSecondaryButton}" VerticalAlignment="Bottom" Padding="10,5" FontSize="10.5"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Scenes Storyboard CRUD -->
+                                <Grid Grid.Row="2" Margin="0,0,0,5">
+                                    <TextBlock Text="STORYBOARD SCENES (THÊM / SỬA / NHÂN BẢN / XÓA PHÂN CẢNH)" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button x:Name="BtnAddScene" Content="+ Thêm Cảnh" Click="BtnAddScene_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnCloneScene" Content="Nhân bản Cảnh" Click="BtnCloneScene_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnDeleteScene" Content="Xóa Cảnh" Click="BtnDeleteScene_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnSaveScenes" Content="Lưu Phân Cảnh" Click="BtnSaveScenes_Click" Style="{StaticResource StudioPrimaryButton}" Padding="9,3" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <DataGrid x:Name="GridScenes" Grid.Row="3"
+                                          AutoGenerateColumns="False" CanUserAddRows="False"
+                                          Background="#0D0F13" Foreground="#F3F4F6"
+                                          BorderBrush="#222631" BorderThickness="1"
+                                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#1B1F2A"
+                                          RowBackground="#111319" AlternatingRowBackground="#151821"
+                                          HeadersVisibility="Column" RowHeaderWidth="0" SelectionMode="Single">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="ID" Binding="{Binding SceneId}" Width="74"/>
+                                        <DataGridTextColumn Header="TÊN CẢNH" Binding="{Binding Title}" Width="110"/>
+                                        <DataGridTextColumn Header="NHÂN VẬT" Binding="{Binding CharacterId}" Width="92"/>
+                                        <DataGridTextColumn Header="START" Binding="{Binding StartTime}" Width="56"/>
+                                        <DataGridTextColumn Header="DUR" Binding="{Binding DurationSec}" Width="52"/>
+                                        <DataGridTextColumn Header="CHUYỂN CẢNH" Binding="{Binding TransitionIn}" Width="96"/>
+                                        <DataGridTextColumn Header="SFX" Binding="{Binding SfxId}" Width="105"/>
+                                        <DataGridTextColumn Header="LỜI THOẠI / BỐI CẢNH CHI TIẾT" Binding="{Binding NarrationText}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- TAB 3: NHÂN VẬT ĐỒNG NHẤT (CONSISTENT CHARACTERS CRUD + CLONE) -->
+                        <TabItem Header="NHÂN VẬT ĐỒNG NHẤT" Style="{StaticResource StudioTabItem}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <TextBlock Text="CONSISTENT CHARACTER PROFILES (ĐỒNG BỘ GIỌNG ĐỌC, MÀU SẮC &amp; NHẬN DIỆN HUD)" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button x:Name="BtnAddCharacter" Content="+ Thêm Nhân Vật" Click="BtnAddCharacter_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnCloneCharacter" Content="Nhân bản Nhân Vật" Click="BtnCloneCharacter_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnDeleteCharacter" Content="Xóa Nhân Vật" Click="BtnDeleteCharacter_Click" Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnSaveCharacters" Content="Lưu Nhân Vật" Click="BtnSaveCharacters_Click" Style="{StaticResource StudioPrimaryButton}" Padding="9,3" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <DataGrid x:Name="GridCharacters" Grid.Row="1"
+                                          AutoGenerateColumns="False" CanUserAddRows="False"
+                                          Background="#0D0F13" Foreground="#F3F4F6"
+                                          BorderBrush="#222631" BorderThickness="1"
+                                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#1B1F2A"
+                                          RowBackground="#111319" AlternatingRowBackground="#151821"
+                                          HeadersVisibility="Column" RowHeaderWidth="0" SelectionMode="Single">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="CHAR ID" Binding="{Binding CharacterId}" Width="90"/>
+                                        <DataGridTextColumn Header="TÊN NHÂN VẬT" Binding="{Binding Name}" Width="140"/>
+                                        <DataGridTextColumn Header="VAI TRÒ" Binding="{Binding Role}" Width="115"/>
+                                        <DataGridTextColumn Header="GIỌNG ĐỌC TTS" Binding="{Binding VoiceId}" Width="130"/>
+                                        <DataGridTextColumn Header="BADGE" Binding="{Binding AvatarBadge}" Width="66"/>
+                                        <DataGridTextColumn Header="MÀU" Binding="{Binding ThemeColor}" Width="72"/>
+                                        <DataGridTextColumn Header="MÔ TẢ NGOẠI HÌNH ĐỒNG NHẤT (VISUAL BIBLE)" Binding="{Binding VisualDescription}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- TAB 4: GIỌNG ĐỌC, THƯ VIỆN ÂM THANH & NHỊP CẮT (VOICEOVER / BGM / SFX / BEAT-CUT) -->
+                        <TabItem Header="GIỌNG ĐỌC, ÂM THANH &amp; BEAT-CUT" Style="{StaticResource StudioTabItem}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Card 1: TTS Voiceover -->
+                                <Border Grid.Column="0" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="5" Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="1. GIỌNG ĐỌC TTS (VOICEOVER)" FontSize="10" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,6"/>
+                                        <ComboBox x:Name="CmbVoiceId" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,6">
+                                            <ComboBoxItem Content="vi-VN-HoaiMyNeural (Female VI)" Tag="vi-VN-HoaiMyNeural"/>
+                                            <ComboBoxItem Content="vi-VN-NamMinhNeural (Male VI)" Tag="vi-VN-NamMinhNeural"/>
+                                            <ComboBoxItem Content="en-US-AriaNeural (Female EN)" Tag="en-US-AriaNeural"/>
+                                            <ComboBoxItem Content="en-US-GuyNeural (Male EN)" Tag="en-US-GuyNeural"/>
+                                            <ComboBoxItem Content="en-US-JennyNeural (Friendly)" Tag="en-US-JennyNeural"/>
+                                            <ComboBoxItem Content="win-sapi-studio (Offline SAPI)" Tag="win-sapi-studio"/>
+                                        </ComboBox>
+                                        <TextBlock Text="Tốc độ đọc (Rate 0.75x - 1.50x)" FontSize="10" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                        <Slider x:Name="SliderVoiceRate" Minimum="0.75" Maximum="1.5" Value="1.0" Margin="0,0,0,8"/>
+                                        <Button x:Name="BtnGenerateVoiceover" Content="Tạo Giọng Đọc &amp; Lồng Tiếng" Click="BtnGenerateVoiceover_Click"
+                                                Style="{StaticResource StudioPrimaryButton}" Padding="8,6" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 2: BGM Music Library -->
+                                <Border Grid.Column="2" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="5" Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="2. THƯ VIỆN NHẠC NỀN (BGM)" FontSize="10" FontWeight="Bold" Foreground="#34D399" Margin="0,0,0,6"/>
+                                        <ComboBox x:Name="CmbBgmPreset" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,6">
+                                            <ComboBoxItem Content="bgm_ambient_pad (Studio Warm)" Tag="bgm_ambient_pad"/>
+                                            <ComboBoxItem Content="bgm_cyber_pulse (Tech 120 BPM)" Tag="bgm_cyber_pulse"/>
+                                            <ComboBoxItem Content="bgm_lofi_chill (Lo-Fi Narrative)" Tag="bgm_lofi_chill"/>
+                                            <ComboBoxItem Content="bgm_news_broadcast (News 128 BPM)" Tag="bgm_news_broadcast"/>
+                                            <ComboBoxItem Content="bgm_dramatic_rise (Tension Swell)" Tag="bgm_dramatic_rise"/>
+                                        </ComboBox>
+                                        <TextBlock Text="Âm lượng nhạc nền (Ducking Volume)" FontSize="10" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                        <Slider x:Name="SliderBgmVolume" Minimum="0.05" Maximum="0.50" Value="0.18" Margin="0,0,0,8"/>
+                                        <Button x:Name="BtnApplyBgm" Content="Trộn Nhạc Nền (Mix BGM)" Click="BtnApplyBgm_Click"
+                                                Style="{StaticResource StudioSecondaryButton}" Padding="8,6" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 3: SFX Sound Effects -->
+                                <Border Grid.Column="4" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="5" Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="3. HIỆU ỨNG ÂM THANH (SFX)" FontSize="10" FontWeight="Bold" Foreground="#FBBF24" Margin="0,0,0,6"/>
+                                        <ComboBox x:Name="CmbSfxPreset" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,6">
+                                            <ComboBoxItem Content="sfx_whoosh_fast (Transition Whoosh)" Tag="sfx_whoosh_fast"/>
+                                            <ComboBoxItem Content="sfx_pop_bubble (Caption Pop)" Tag="sfx_pop_bubble"/>
+                                            <ComboBoxItem Content="sfx_glitch_digital (Digital Zap)" Tag="sfx_glitch_digital"/>
+                                            <ComboBoxItem Content="sfx_cinematic_hit (Impact Boom)" Tag="sfx_cinematic_hit"/>
+                                            <ComboBoxItem Content="sfx_camera_shutter (Camera Snap)" Tag="sfx_camera_shutter"/>
+                                            <ComboBoxItem Content="sfx_chime_ding (Crystal Chime)" Tag="sfx_chime_ding"/>
+                                        </ComboBox>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Tại giây (s):" FontSize="10" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                            <TextBox x:Name="TxtSfxTimestamp" Grid.Column="2" Text="0.50" Style="{StaticResource StudioTextBox}" Padding="6,4" FontSize="11"/>
+                                        </Grid>
+                                        <Button x:Name="BtnInsertSfx" Content="Chèn SFX Tại Playhead" Click="BtnInsertSfx_Click"
+                                                Style="{StaticResource StudioSecondaryButton}" Padding="8,6" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 4: Auto Beat-Cut Engine -->
+                                <Border Grid.Column="6" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="5" Padding="10">
+                                    <StackPanel>
+                                        <TextBlock Text="4. NHỊP CẮT TỰ ĐỘNG (BEAT-CUT)" FontSize="10" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,6"/>
+                                        <ComboBox x:Name="CmbBeatBpm" SelectedIndex="2" Style="{StaticResource StudioComboBox}" Margin="0,0,0,6">
+                                            <ComboBoxItem Content="90 BPM (Chill)" Tag="90"/>
+                                            <ComboBoxItem Content="110 BPM (Narrative)" Tag="110"/>
+                                            <ComboBoxItem Content="120 BPM (Standard Cut)" Tag="120"/>
+                                            <ComboBoxItem Content="128 BPM (Fast Reels)" Tag="128"/>
+                                            <ComboBoxItem Content="140 BPM (Hyper Montage)" Tag="140"/>
+                                        </ComboBox>
+                                        <CheckBox x:Name="ChkSnapSubtitles" Content="Khớp phụ đề theo Beat" IsChecked="True" Foreground="#D1D5DB" FontSize="10" Margin="0,0,0,3"/>
+                                        <CheckBox x:Name="ChkBeatPulse" Content="Nháy nhịp thị giác (Pulse)" IsChecked="True" Foreground="#D1D5DB" FontSize="10" Margin="0,0,0,8"/>
+                                        <Button x:Name="BtnApplyBeatCut" Content="Tự Động Cắt Theo Nhịp" Click="BtnApplyBeatCut_Click"
+                                                Style="{StaticResource StudioPrimaryButton}" Padding="8,6" FontSize="10.5"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- TAB 5: NHẬT KÝ LOG & LỊCH SỬ THAO TÁC (AUDIT LOGS LEDGER) -->
+                        <TabItem Header="NHẬT KÝ LOG (AUDIT)" Style="{StaticResource StudioTabItem}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <TextBlock Text="STRUCTURED PROJECT AUDIT LOG LEDGER (TRUY VẾT MỌI THAO TÁC PIPELINE, NLE &amp; MCP)" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnExportAuditLog" Content="Xuất File Audit Log (.json)" Click="BtnExportAuditLog_Click"
+                                            Style="{StaticResource StudioSecondaryButton}" Padding="8,3" FontSize="10.5" HorizontalAlignment="Right"/>
+                                </Grid>
+
+                                <DataGrid x:Name="GridAuditLogs" Grid.Row="1"
+                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                          Background="#0D0F13" Foreground="#F3F4F6"
+                                          BorderBrush="#222631" BorderThickness="1"
+                                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#1B1F2A"
+                                          RowBackground="#111319" AlternatingRowBackground="#151821"
+                                          HeadersVisibility="Column" RowHeaderWidth="0" SelectionMode="Single">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="THỜI GIAN" Binding="{Binding Timestamp}" Width="132"/>
+                                        <DataGridTextColumn Header="PHÂN HỆ" Binding="{Binding Category}" Width="88"/>
+                                        <DataGridTextColumn Header="THAO TÁC" Binding="{Binding Action}" Width="140"/>
+                                        <DataGridTextColumn Header="TRẠNG THÁI" Binding="{Binding Status}" Width="74"/>
+                                        <DataGridTextColumn Header="CHI TIẾT THỰC THI" Binding="{Binding Details}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+
+                    </TabControl>
                 </Border>
             </Grid>
 
-            <!-- RIGHT DOCK: INSPECTOR, COLOR GRADING, TRIM/AUDIO MASTERING & TELEMETRY -->
+            <!-- RIGHT DOCK: INSPECTOR, COLOR GRADING, TRIM/AUDIO MASTERING & CONSOLE LOG -->
             <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -568,45 +886,45 @@
                 </Grid.RowDefinitions>
 
                 <!-- 1. Stream Inspector & Pipeline Status -->
-                <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="14,10">
+                <Border Grid.Row="0" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,8">
                     <StackPanel>
                         <Grid Margin="0,0,0,4">
-                            <TextBlock Text="PIPELINE &amp; FFPROBE STREAM INSPECTOR" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF"/>
-                            <TextBlock x:Name="TxtProgressPercent" Text="100%" FontSize="11" FontFamily="Consolas" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Right"/>
+                            <TextBlock Text="PIPELINE &amp; FFPROBE INSPECTOR" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF"/>
+                            <TextBlock x:Name="TxtProgressPercent" Text="100%" FontSize="10.5" FontFamily="Consolas" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Right"/>
                         </Grid>
                         <ProgressBar x:Name="PbPipeline" Height="5" Minimum="0" Maximum="100" Value="100"
                                      Background="#181C26" Foreground="{StaticResource AccentPrimary}" BorderThickness="0" Margin="0,0,0,4"/>
-                        <TextBlock x:Name="TxtStepStatus" Text="Ready" FontSize="11" Foreground="#D1D5DB" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock x:Name="TxtStepStatus" Text="Ready" FontSize="10.5" Foreground="#D1D5DB" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"/>
 
-                        <Border Background="#0D0F14" BorderBrush="#202532" BorderThickness="1" CornerRadius="4" Padding="10,7">
+                        <Border Background="#0D0F14" BorderBrush="#202532" BorderThickness="1" CornerRadius="4" Padding="8,5">
                             <UniformGrid Rows="3" Columns="2">
-                                <TextBlock x:Name="TxtSpecResolution" Text="RES: 1280x720" FontSize="10.5" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
-                                <TextBlock x:Name="TxtSpecFps" Text="FPS: 30.00" FontSize="10.5" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
-                                <TextBlock x:Name="TxtSpecCodec" Text="VID: h264" FontSize="10.5" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
-                                <TextBlock x:Name="TxtSpecAudio" Text="AUD: aac / 16000Hz" FontSize="10.5" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
-                                <TextBlock x:Name="TxtSpecDuration" Text="DUR: 6.00s" FontSize="10.5" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
-                                <TextBlock x:Name="TxtSpecSize" Text="SIZE: -- KB" FontSize="10.5" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
+                                <TextBlock x:Name="TxtSpecResolution" Text="RES: 1280x720" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
+                                <TextBlock x:Name="TxtSpecFps" Text="FPS: 30.00" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
+                                <TextBlock x:Name="TxtSpecCodec" Text="VID: h264" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
+                                <TextBlock x:Name="TxtSpecAudio" Text="AUD: aac / 16000Hz" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
+                                <TextBlock x:Name="TxtSpecDuration" Text="DUR: 6.00s" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
+                                <TextBlock x:Name="TxtSpecSize" Text="SIZE: -- KB" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" Margin="0,1"/>
                             </UniformGrid>
                         </Border>
                     </StackPanel>
                 </Border>
 
                 <!-- 2. Color Grading & LUT Studio -->
-                <Border Grid.Row="2" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="14,10">
+                <Border Grid.Row="2" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,8">
                     <StackPanel>
-                        <Grid Margin="0,0,0,6">
-                            <TextBlock Text="COLOR GRADING &amp; LUT STUDIO (FFMPEG EQ)" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
-                            <Button x:Name="BtnResetColor" Content="Reset" Click="BtnResetColor_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10" HorizontalAlignment="Right"/>
+                        <Grid Margin="0,0,0,5">
+                            <TextBlock Text="COLOR GRADING &amp; LUT STUDIO" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnResetColor" Content="Reset" Click="BtnResetColor_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="9.5" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <Grid Margin="0,0,0,8">
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="8"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Look Preset:" FontSize="11" Foreground="#9CA3AF" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="CmbColorPreset" Grid.Column="2" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Padding="8,4">
+                            <TextBlock Grid.Column="0" Text="LUT Preset:" FontSize="10.5" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="CmbColorPreset" Grid.Column="2" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Padding="6,3" FontSize="11">
                                 <ComboBoxItem Content="natural (Rec.709 Standard)" Tag="natural"/>
                                 <ComboBoxItem Content="teal_orange (Cinematic Grade)" Tag="teal_orange"/>
                                 <ComboBoxItem Content="warm_vintage (Golden Film)" Tag="warm_vintage"/>
@@ -615,109 +933,111 @@
                             </ComboBox>
                         </Grid>
 
-                        <Grid Margin="0,0,0,4">
+                        <Grid Margin="0,0,0,3">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="74"/>
+                                <ColumnDefinition Width="68"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="38"/>
+                                <ColumnDefinition Width="36"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Brightness" FontSize="10.5" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                            <TextBlock Text="Brightness" FontSize="10" Foreground="#9CA3AF" VerticalAlignment="Center"/>
                             <Slider x:Name="SliderBrightness" Grid.Column="1" Minimum="-0.4" Maximum="0.4" Value="0.0" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding ElementName=SliderBrightness, Path=Value, StringFormat={}{0:0.00}}" Grid.Column="2" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <Grid Margin="0,0,0,4">
+                        <Grid Margin="0,0,0,3">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="74"/>
+                                <ColumnDefinition Width="68"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="38"/>
+                                <ColumnDefinition Width="36"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Contrast" FontSize="10.5" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                            <TextBlock Text="Contrast" FontSize="10" Foreground="#9CA3AF" VerticalAlignment="Center"/>
                             <Slider x:Name="SliderContrast" Grid.Column="1" Minimum="0.5" Maximum="2.0" Value="1.0" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding ElementName=SliderContrast, Path=Value, StringFormat={}{0:0.00}}" Grid.Column="2" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <Grid Margin="0,0,0,8">
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="74"/>
+                                <ColumnDefinition Width="68"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="38"/>
+                                <ColumnDefinition Width="36"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Saturation" FontSize="10.5" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                            <TextBlock Text="Saturation" FontSize="10" Foreground="#9CA3AF" VerticalAlignment="Center"/>
                             <Slider x:Name="SliderSaturation" Grid.Column="1" Minimum="0.0" Maximum="2.5" Value="1.0" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding ElementName=SliderSaturation, Path=Value, StringFormat={}{0:0.00}}" Grid.Column="2" FontSize="10" FontFamily="Consolas" Foreground="#D1D5DB" HorizontalAlignment="Right"/>
                         </Grid>
 
                         <Button x:Name="BtnApplyColorGrade" Content="Apply Color Grade to Master" Click="BtnApplyColorGrade_Click"
-                                Style="{StaticResource StudioSecondaryButton}" Padding="10,5"/>
+                                Style="{StaticResource StudioSecondaryButton}" Padding="8,4" FontSize="11"/>
                     </StackPanel>
                 </Border>
 
                 <!-- 3. Non-Linear Trim & Audio Mastering Studio -->
-                <Border Grid.Row="4" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="14,10">
+                <Border Grid.Row="4" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,8">
                     <StackPanel>
-                        <TextBlock Text="NON-LINEAR TRIM &amp; AUDIO MASTERING" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" Margin="0,0,0,6"/>
+                        <TextBlock Text="NON-LINEAR TRIM &amp; AUDIO MASTERING" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" Margin="0,0,0,5"/>
 
-                        <Grid Margin="0,0,0,10">
+                        <Grid Margin="0,0,0,7">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="5"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="5"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="TxtTrimStart" Grid.Column="0" Text="0.0" Style="{StaticResource StudioTextBox}" ToolTip="Trim In (Seconds)"/>
-                            <TextBox x:Name="TxtTrimEnd" Grid.Column="2" Text="6.0" Style="{StaticResource StudioTextBox}" ToolTip="Trim Out (Seconds)"/>
+                            <TextBox x:Name="TxtTrimStart" Grid.Column="0" Text="0.0" Style="{StaticResource StudioTextBox}"/>
+                            <TextBox x:Name="TxtTrimEnd" Grid.Column="2" Text="6.0" Style="{StaticResource StudioTextBox}"/>
                             <Button x:Name="BtnTrimVideo" Grid.Column="4" Content="Trim MP4" Click="BtnTrimVideo_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="10,5"/>
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="10,4" FontSize="11"/>
                         </Grid>
 
-                        <UniformGrid Rows="1" Columns="3" Margin="0,0,0,8">
-                            <CheckBox x:Name="ChkSilenceCut" Content="Silence Cut" Foreground="#D1D5DB" FontSize="11" VerticalContentAlignment="Center"/>
-                            <CheckBox x:Name="ChkLoudnorm" Content="EBU R128" IsChecked="True" Foreground="#D1D5DB" FontSize="11" VerticalContentAlignment="Center"/>
-                            <CheckBox x:Name="ChkMixBgm" Content="+ Mix BGM" IsChecked="True" Foreground="#D1D5DB" FontSize="11" VerticalContentAlignment="Center"/>
+                        <UniformGrid Columns="3" Margin="0,0,0,6">
+                            <CheckBox x:Name="ChkSilenceCut" Content="Silence Cut" Foreground="#D1D5DB" FontSize="10.5"/>
+                            <CheckBox x:Name="ChkLoudnorm" Content="EBU R128" IsChecked="True" Foreground="#D1D5DB" FontSize="10.5"/>
+                            <CheckBox x:Name="ChkMixBgm" Content="+ Mix BGM" IsChecked="True" Foreground="#D1D5DB" FontSize="10.5"/>
                         </UniformGrid>
 
                         <Button x:Name="BtnMasterAudio" Content="Execute Audio Mastering &amp; BGM Mix" Click="BtnMasterAudio_Click"
-                                Style="{StaticResource StudioSecondaryButton}" Padding="10,5"/>
+                                Style="{StaticResource StudioSecondaryButton}" Padding="8,4" FontSize="11"/>
                     </StackPanel>
                 </Border>
 
-                <!-- 4. AI Antigravity MCP Dispatch & Telemetry Log -->
-                <Border Grid.Row="6" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="14,10">
+                <!-- 4. Antigravity MCP Direct Command & Console Telemetry Log -->
+                <Border Grid.Row="6" Background="{StaticResource BgPanel}" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1" CornerRadius="6" Padding="12,8">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="ANTIGRAVITY MCP DIRECT COMMAND &amp; LOG" FontSize="10.5" FontWeight="Bold" Foreground="#9CA3AF" Margin="0,0,0,6"/>
-                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <TextBlock Grid.Row="0" Text="ANTIGRAVITY MCP &amp; CONSOLE LOG" FontSize="10" FontWeight="Bold" Foreground="#9CA3AF" Margin="0,0,0,5"/>
+
+                        <Grid Grid.Row="1" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="5"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="TxtAiCommand" Grid.Column="0" Text="Render HyperFrames promo video" Style="{StaticResource StudioTextBox}"/>
                             <Button x:Name="BtnRunAiCommand" Grid.Column="2" Content="Dispatch" Click="BtnRunAiCommand_Click"
-                                    Style="{StaticResource StudioSecondaryButton}" Padding="10,5"/>
+                                    Style="{StaticResource StudioSecondaryButton}" Padding="9,4" FontSize="11"/>
                         </Grid>
-                        <TextBox x:Name="TxtLogs" Grid.Row="2"
-                                 Background="#090A0E" Foreground="#9CA3AF" BorderBrush="#1C202B" BorderThickness="1"
-                                 FontFamily="Consolas" FontSize="10.5" IsReadOnly="True"
-                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                                 TextWrapping="Wrap" Padding="6"/>
+
+                        <TextBox x:Name="TxtLogs" Grid.Row="2" IsReadOnly="True"
+                                 Background="#090B0E" Foreground="#A7F3D0" BorderBrush="#1F2430" BorderThickness="1"
+                                 FontFamily="Consolas" FontSize="10" Padding="7" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"/>
                     </Grid>
                 </Border>
             </Grid>
         </Grid>
 
-        <!-- BOTTOM STATUS BAR -->
-        <Border Grid.Row="2" Background="#0D0F14" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0" Padding="16,0">
+        <!-- BOTTOM WORKSTATION STATUS BAR -->
+        <Border Grid.Row="2" Background="#0E1015" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0" Padding="14,0">
             <Grid>
-                <TextBlock Text="Clean Architecture: Domain -> Application -> Infrastructure -> Presentation | Spec Kit (.specify/memory/constitution.md) | 5 GitHub Adapters Active"
-                           FontSize="10.5" Foreground="#6B7280" VerticalAlignment="Center"/>
-                <TextBlock x:Name="TxtStatusRight" Text="Workstation Ready" FontSize="10.5" Foreground="#9CA3AF" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                <TextBlock Text="Clean Architecture: Domain -> Application -> Infrastructure -> Presentation  |  Spec Kit: .specify/memory/constitution.md  |  v3.0 Storyboard Studio"
+                           FontSize="10" Foreground="#6B7280" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TxtStatusRight" Text="No active project selected"
+                           FontSize="10" FontFamily="Consolas" Foreground="#9CA3AF" HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>

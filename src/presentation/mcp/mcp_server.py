@@ -226,6 +226,176 @@ def kinetix_capture_snapshot(
 
 
 @mcp.tool()
+def kinetix_clone_project(
+    project_id: str,
+    new_project_id: str | None = None,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Clone an existing project (video assets, subtitles, scenes, characters, context bible)."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.clone_project(project_id=project_id, new_project_id=new_project_id).to_dict()
+
+
+@mcp.tool()
+def kinetix_delete_project(
+    project_id: str,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Delete a video project and remove its workspace directory."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.delete_project(project_id=project_id)
+
+
+@mcp.tool()
+def kinetix_manage_character(
+    project_id: str,
+    action: str = "upsert",
+    character_id: str = "char_host",
+    name: str = "Studio Character",
+    role: str = "Presenter",
+    voice_id: str = "vi-VN-HoaiMyNeural",
+    theme_color: str = "#3B82F6",
+    visual_description: str = "Minimal studio presenter",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Add, update, clone, or delete a Consistent Character profile bound to voiceover & motion HUD."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.manage_character(
+        project_id=project_id,
+        action=action,
+        character_id=character_id,
+        char_data={
+            "character_id": character_id,
+            "name": name,
+            "role": role,
+            "voice_id": voice_id,
+            "theme_color": theme_color,
+            "visual_description": visual_description,
+            "avatar_badge": role.split()[0].upper()[:6],
+        },
+    )
+    return updated.to_dict()
+
+
+@mcp.tool()
+def kinetix_manage_scene(
+    project_id: str,
+    action: str = "upsert",
+    scene_id: str = "scene_01",
+    title: str = "Studio Intro",
+    setting_context: str = "Modern Studio Desk",
+    character_id: str = "char_host",
+    narration_text: str = "Welcome to Kinetix Studio",
+    start_time: float = 0.0,
+    duration_sec: float = 2.0,
+    transition_in: str = "fade_black",
+    animation_preset: str = "spring_pop",
+    sfx_id: str = "sfx_whoosh_fast",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Add, update, clone, or delete a Storyboard Scene linking context, character, transition, and SFX."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    updated = service.manage_scene(
+        project_id=project_id,
+        action=action,
+        scene_id=scene_id,
+        scene_data={
+            "scene_id": scene_id,
+            "title": title,
+            "setting_context": setting_context,
+            "character_id": character_id,
+            "narration_text": narration_text,
+            "start_time": start_time,
+            "duration_sec": duration_sec,
+            "transition_in": transition_in,
+            "animation_preset": animation_preset,
+            "sfx_id": sfx_id,
+        },
+    )
+    return updated.to_dict()
+
+
+@mcp.tool()
+def kinetix_generate_voiceover(
+    project_id: str,
+    voice_id: str = "vi-VN-HoaiMyNeural",
+    text: str | None = None,
+    rate: float = 1.0,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Generate TTS voiceover narration audio and replace the project's primary voice track."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.synthesize_project_voiceover(
+        project_id=project_id,
+        text=text,
+        voice_id=voice_id,
+        rate=rate,
+    ).to_dict()
+
+
+@mcp.tool()
+def kinetix_apply_sound_library(
+    project_id: str,
+    bgm_preset: str | None = "bgm_cyber_pulse",
+    bgm_volume: float = 0.18,
+    sfx_id: str | None = "sfx_whoosh_fast",
+    sfx_timestamp: float = 0.25,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Mix a curated BGM music bed and/or insert a timestamped SFX sound effect onto the video."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.apply_project_sound_library(
+        project_id=project_id,
+        bgm_preset=bgm_preset,
+        bgm_volume=bgm_volume,
+        sfx_id=sfx_id,
+        sfx_timestamp=sfx_timestamp,
+    ).to_dict()
+
+
+@mcp.tool()
+def kinetix_apply_beat_cut(
+    project_id: str,
+    bpm: int = 120,
+    align_subtitles: bool = True,
+    pulse_flash: bool = True,
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Generate BPM beat grid markers, snap subtitle cut points to beats, and apply rhythmic pulse accents."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.apply_project_beat_cut(
+        project_id=project_id,
+        bpm=bpm,
+        align_subtitles=align_subtitles,
+        pulse_flash=pulse_flash,
+    ).to_dict()
+
+
+@mcp.tool()
+def kinetix_apply_transition_animation(
+    project_id: str,
+    transition_preset: str = "fade_black",
+    animation_preset: str = "spring_pop",
+    workspace_dir: str | None = None,
+) -> Dict[str, Any]:
+    """Apply video transition and camera/motion animation filters to a project."""
+    ws = Path(workspace_dir) if workspace_dir else None
+    service = _get_service(ws)
+    return service.apply_project_fx_motion(
+        project_id=project_id,
+        transition_preset=transition_preset,
+        animation_preset=animation_preset,
+    ).to_dict()
+
+
+@mcp.tool()
 def kinetix_update_subtitles(
     project_id: str,
     subtitles_input: str,

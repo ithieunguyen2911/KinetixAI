@@ -1,16 +1,22 @@
-"""JsonProjectRepository - File-backed state store for VideoProjects."""
+"""JsonProjectRepository - File-backed state store for VideoProjects (v3.0 Storyboard & NLE)."""
 
 import json
 from pathlib import Path
 from typing import Dict, List
 
 from src.domain.entities.enums import JobStatus, RenderEngineType
+from src.domain.entities.studio_entities import (
+    AuditLogEntry,
+    CharacterProfile,
+    SceneContext,
+    StoryScene,
+)
 from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.domain.entities.video_project import VideoProject
 
 
 class JsonProjectRepository:
-    """Persists VideoProject state into a workspace JSON file."""
+    """Persists VideoProject state (including Context Bible, Characters, Scenes & Audit Logs)."""
 
     def __init__(self, storage_file: Path) -> None:
         self.storage_file = storage_file
@@ -41,6 +47,13 @@ class JsonProjectRepository:
     def get(self, project_id: str) -> VideoProject | None:
         return self._cache.get(project_id)
 
+    def delete(self, project_id: str) -> bool:
+        if project_id in self._cache:
+            del self._cache[project_id]
+            self._save_to_disk()
+            return True
+        return False
+
     def list_all(self) -> List[VideoProject]:
         return list(self._cache.values())
 
@@ -64,6 +77,11 @@ class JsonProjectRepository:
                     words=words,
                 )
             )
+        characters = [CharacterProfile.from_dict(c) for c in data.get("characters", [])]
+        scenes = [StoryScene.from_dict(sc) for sc in data.get("scenes", [])]
+        audit_logs = [AuditLogEntry.from_dict(a) for a in data.get("audit_logs", [])]
+        scene_context = SceneContext.from_dict(data.get("scene_context"))
+
         return VideoProject(
             project_id=str(data["project_id"]),
             source_url=str(data["source_url"]),
@@ -79,4 +97,13 @@ class JsonProjectRepository:
             progress_percent=int(data.get("progress_percent", 0)),
             current_step=str(data.get("current_step", "Ready")),
             error_message=data.get("error_message"),
+            animation_preset=str(data.get("animation_preset", "spring_pop")),
+            transition_preset=str(data.get("transition_preset", "fade_black")),
+            voice_id=str(data.get("voice_id", "vi-VN-HoaiMyNeural")),
+            bgm_preset=str(data.get("bgm_preset", "bgm_ambient_pad")),
+            beat_timestamps=[float(b) for b in data.get("beat_timestamps", [])],
+            scene_context=scene_context,
+            characters=characters,
+            scenes=scenes,
+            audit_logs=audit_logs,
         )

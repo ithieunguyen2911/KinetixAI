@@ -505,6 +505,245 @@ class FfmpegAdapter(IVideoProcessor):
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return output_image_path
 
+    def replace_audio_track(
+        self,
+        video_path: Path,
+        audio_path: Path,
+        output_path: Path,
+    ) -> Path:
+        """Replace the active audio stream of video_path with spoken voiceover audio_path."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_voice_{output_path.name}")
+
+        probe = self.probe_media(video_path)
+        dur = max(2.0, float(probe.get("duration_seconds") or 6.0))
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-i",
+            str(audio_path),
+            "-filter_complex",
+            f"[1:a]apad=whole_dur={dur:.2f}[aout]",
+            "-map",
+            "0:v:0",
+            "-map",
+            "[aout]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-t",
+            f"{dur:.2f}",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def insert_sfx_track(
+        self,
+        video_path: Path,
+        sfx_path: Path,
+        output_path: Path,
+        timestamp_sec: float = 0.0,
+        volume: float = 0.65,
+    ) -> Path:
+        """Mix a short sound effect (SFX) into video_path at the exact timestamp_sec."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        if not sfx_path.exists():
+            raise FileNotFoundError(f"SFX file not found: {sfx_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_sfx_{output_path.name}")
+        delay_ms = max(0, int(round(timestamp_sec * 1000)))
+
+        filter_complex = (
+            f"[1:a]adelay={delay_ms}|{delay_ms},volume={volume:.2f}[sfx];"
+            "[0:a][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-i",
+            str(sfx_path),
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "0:v:0",
+            "-map",
+            "[aout]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            str(staging_path),
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if res.returncode != 0:
+            # Fallback if base video had no audio track
+            cmd_fallback = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-i",
+                str(sfx_path),
+                "-filter_complex",
+                f"[1:a]adelay={delay_ms}|{delay_ms},volume={volume:.2f}[aout]",
+                "-map",
+                "0:v:0",
+                "-map",
+                "[aout]",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-shortest",
+                str(staging_path),
+            ]
+            subprocess.run(cmd_fallback, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def apply_transition_and_animation(
+        self,
+        video_path: Path,
+        output_path: Path,
+        transition_preset: str = "fade_black",
+        animation_preset: str = "spring_pop",
+    ) -> Path:
+        """Apply visual transition and camera/motion animation filters onto video_path."""
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_fx_{output_path.name}")
+
+        probe = self.probe_media(video_path)
+        dur = max(1.5, float(probe.get("duration_seconds") or 6.0))
+        w = int(probe.get("width") or 1280)
+        h = int(probe.get("height") or 720)
+        out_st = max(0.5, dur - 0.55)
+
+        vf_parts: List[str] = []
+        tr = transition_preset.strip().lower()
+        an = animation_preset.strip().lower()
+
+        if an == "ken_burns_zoom":
+            vf_parts.append(
+                f"scale=1600:-1,zoompan=z='min(zoom+0.0008,1.12)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps=30"
+            )
+        elif an == "neon_glow_pulse":
+            vf_parts.append("eq=contrast=1.08:saturation=1.20")
+            vf_parts.append(
+                f"drawbox=x=0:y=0:w={w}:h=4:color=0x38BDF8@0.90:t=fill:enable='gt(mod(t\\,1.0)\\,0.5)'"
+            )
+        elif an == "camera_shake_impact":
+            vf_parts.append(
+                f"crop=w=iw-16:h=ih-16:x='8+8*sin(t*36)*lt(t\\,0.50)':y='8+6*cos(t*40)*lt(t\\,0.50)',scale={w}:{h}"
+            )
+
+        if tr == "fade_black":
+            vf_parts.append(f"fade=t=in:st=0:d=0.50,fade=t=out:st={out_st:.2f}:d=0.50")
+        elif tr == "cross_dissolve":
+            vf_parts.append(f"fade=t=in:st=0:d=0.45:color=0x0B0F19,fade=t=out:st={out_st:.2f}:d=0.45:color=0x0B0F19")
+        elif tr == "wipe_left":
+            vf_parts.append("drawbox=x='max(0,w-2400*t)':y=0:w=iw:h=ih:color=0x0B0F19@0.96:t=fill:enable='lt(t\\,0.55)'")
+        elif tr == "slide_up":
+            vf_parts.append("drawbox=x=0:y='min(ih,ih*(1-t/0.50))':w=iw:h=ih:color=0x0B0F19@0.96:t=fill:enable='lt(t\\,0.50)'")
+        elif tr == "glitch_flash":
+            vf_parts.append("rgbashift=rh=-8:bh=8:enable='lt(t\\,0.35)+between(t\\,2.0\\,2.2)+between(t\\,4.0\\,4.2)'")
+
+        if not vf_parts:
+            vf_parts.append("null")
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            ",".join(vf_parts),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "copy",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return self._safe_finalize_output(staging_path, output_path)
+
+    def detect_beats_and_cut(
+        self,
+        video_path: Path,
+        output_path: Path,
+        bpm: int = 120,
+        pulse_flash: bool = True,
+    ) -> tuple[Path, List[float]]:
+        """Generate BPM beat timestamps (.beats.json) and render rhythmic beat-cut accents."""
+        import json
+
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_path = output_path.with_name(f".staging_beat_{output_path.name}")
+
+        probe = self.probe_media(video_path)
+        dur = max(1.0, float(probe.get("duration_seconds") or 6.0))
+        safe_bpm = max(40, min(240, int(bpm)))
+        beat_step = 60.0 / safe_bpm
+        beats: List[float] = []
+        t = 0.0
+        while t < dur - 0.05:
+            beats.append(round(t, 3))
+            t += beat_step
+
+        beats_file = output_path.with_suffix(".beats.json")
+        beats_file.write_text(
+            json.dumps({"bpm": safe_bpm, "duration_seconds": dur, "beats": beats}, indent=2),
+            encoding="utf-8",
+        )
+
+        if pulse_flash and beats:
+            downbeats = [b for idx, b in enumerate(beats) if idx % 2 == 0][:16]
+            enable_expr = "+".join([f"between(t\\,{b:.2f}\\,{b + 0.14:.2f})" for b in downbeats])
+            vf = (
+                f"drawbox=x=0:y=0:w=iw:h=6:color=0x3B82F6@0.92:t=fill:enable='{enable_expr}',"
+                f"drawbox=x=0:y=ih-6:w=iw:h=6:color=0x3B82F6@0.92:t=fill:enable='{enable_expr}'"
+            )
+        else:
+            vf = "null"
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            vf,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "copy",
+            str(staging_path),
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        final_file = self._safe_finalize_output(staging_path, output_path)
+        return final_file, beats
+
     def mix_audio_tracks(
         self,
         video_path: Path,

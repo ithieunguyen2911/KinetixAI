@@ -39,6 +39,102 @@ public class SubtitleSegmentDto
         : (string.IsNullOrWhiteSpace(Text) ? 0 : Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length);
 }
 
+public class SceneContextDto
+{
+    [JsonPropertyName("world_setting")]
+    public string WorldSetting { get; set; } = "Modern AI Production Studio — Dark Slate Workstation";
+
+    [JsonPropertyName("visual_style")]
+    public string VisualStyle { get; set; } = "Cinematic Clean UI, Subtle Tech Grid, High Broadcast Contrast";
+
+    [JsonPropertyName("lighting_mood")]
+    public string LightingMood { get; set; } = "Cool Cobalt Rim Light + Crisp Key Fill";
+
+    [JsonPropertyName("camera_lens")]
+    public string CameraLens { get; set; } = "35mm Anamorphic Studio Framing";
+
+    [JsonPropertyName("continuity_notes")]
+    public string ContinuityNotes { get; set; } = "Maintain consistent character badge colors, voice tone, and subtitle styling.";
+}
+
+public class CharacterProfileDto
+{
+    [JsonPropertyName("character_id")]
+    public string CharacterId { get; set; } = "char_host";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "Minh Anh (Host)";
+
+    [JsonPropertyName("role")]
+    public string Role { get; set; } = "Presenter";
+
+    [JsonPropertyName("visual_description")]
+    public string VisualDescription { get; set; } = string.Empty;
+
+    [JsonPropertyName("voice_id")]
+    public string VoiceId { get; set; } = "vi-VN-HoaiMyNeural";
+
+    [JsonPropertyName("theme_color")]
+    public string ThemeColor { get; set; } = "#3B82F6";
+
+    [JsonPropertyName("avatar_badge")]
+    public string AvatarBadge { get; set; } = "HOST";
+}
+
+public class StorySceneDto
+{
+    [JsonPropertyName("scene_id")]
+    public string SceneId { get; set; } = "scene_01";
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = "Scene 01";
+
+    [JsonPropertyName("setting_context")]
+    public string SettingContext { get; set; } = "Main Studio Desk";
+
+    [JsonPropertyName("character_id")]
+    public string CharacterId { get; set; } = "char_host";
+
+    [JsonPropertyName("narration_text")]
+    public string NarrationText { get; set; } = string.Empty;
+
+    [JsonPropertyName("start_time")]
+    public double StartTime { get; set; }
+
+    [JsonPropertyName("duration_sec")]
+    public double DurationSec { get; set; } = 2.0;
+
+    [JsonPropertyName("transition_in")]
+    public string TransitionIn { get; set; } = "fade_black";
+
+    [JsonPropertyName("animation_preset")]
+    public string AnimationPreset { get; set; } = "spring_pop";
+
+    [JsonPropertyName("sfx_id")]
+    public string SfxId { get; set; } = "sfx_whoosh_fast";
+}
+
+public class AuditLogEntryDto
+{
+    [JsonPropertyName("log_id")]
+    public string LogId { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = string.Empty;
+
+    [JsonPropertyName("category")]
+    public string Category { get; set; } = "PIPELINE";
+
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = string.Empty;
+
+    [JsonPropertyName("details")]
+    public string Details { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "OK";
+}
+
 public class TimelineClipBlockVm
 {
     public string Label { get; set; } = string.Empty;
@@ -66,6 +162,96 @@ public class CreateProjectRequestDto
 
     [JsonPropertyName("script_text")]
     public string? ScriptText { get; set; }
+}
+
+public class CloneProjectRequestDto
+{
+    [JsonPropertyName("new_project_id")]
+    public string? NewProjectId { get; set; }
+}
+
+public class ManageSceneRequestDto
+{
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = "replace_all";
+
+    [JsonPropertyName("scene_id")]
+    public string? SceneId { get; set; }
+
+    [JsonPropertyName("scene")]
+    public StorySceneDto? Scene { get; set; }
+
+    [JsonPropertyName("scenes")]
+    public List<StorySceneDto>? Scenes { get; set; }
+}
+
+public class ManageCharacterRequestDto
+{
+    [JsonPropertyName("action")]
+    public string Action { get; set; } = "replace_all";
+
+    [JsonPropertyName("character_id")]
+    public string? CharacterId { get; set; }
+
+    [JsonPropertyName("character")]
+    public CharacterProfileDto? Character { get; set; }
+
+    [JsonPropertyName("characters")]
+    public List<CharacterProfileDto>? Characters { get; set; }
+}
+
+public class VoiceoverRequestDto
+{
+    [JsonPropertyName("text")]
+    public string? Text { get; set; }
+
+    [JsonPropertyName("voice_id")]
+    public string VoiceId { get; set; } = "vi-VN-HoaiMyNeural";
+
+    [JsonPropertyName("rate")]
+    public double Rate { get; set; } = 1.0;
+
+    [JsonPropertyName("pitch_hz")]
+    public int PitchHz { get; set; } = 0;
+}
+
+public class SoundLibraryRequestDto
+{
+    [JsonPropertyName("bgm_preset")]
+    public string? BgmPreset { get; set; }
+
+    [JsonPropertyName("bgm_volume")]
+    public double BgmVolume { get; set; } = 0.18;
+
+    [JsonPropertyName("sfx_id")]
+    public string? SfxId { get; set; }
+
+    [JsonPropertyName("sfx_timestamp")]
+    public double SfxTimestamp { get; set; } = 0.5;
+
+    [JsonPropertyName("sfx_volume")]
+    public double SfxVolume { get; set; } = 0.65;
+}
+
+public class FxMotionRequestDto
+{
+    [JsonPropertyName("transition_preset")]
+    public string TransitionPreset { get; set; } = "fade_black";
+
+    [JsonPropertyName("animation_preset")]
+    public string AnimationPreset { get; set; } = "spring_pop";
+}
+
+public class BeatCutRequestDto
+{
+    [JsonPropertyName("bpm")]
+    public int Bpm { get; set; } = 120;
+
+    [JsonPropertyName("align_subtitles")]
+    public bool AlignSubtitles { get; set; } = true;
+
+    [JsonPropertyName("pulse_flash")]
+    public bool PulseFlash { get; set; } = true;
 }
 
 public class AiMcpCommandRequestDto
@@ -243,6 +429,33 @@ public class ProjectResponseDto
 
     [JsonPropertyName("error_message")]
     public string? ErrorMessage { get; set; }
+
+    [JsonPropertyName("animation_preset")]
+    public string AnimationPreset { get; set; } = "spring_pop";
+
+    [JsonPropertyName("transition_preset")]
+    public string TransitionPreset { get; set; } = "fade_black";
+
+    [JsonPropertyName("voice_id")]
+    public string VoiceId { get; set; } = "vi-VN-HoaiMyNeural";
+
+    [JsonPropertyName("bgm_preset")]
+    public string BgmPreset { get; set; } = "bgm_ambient_pad";
+
+    [JsonPropertyName("beat_timestamps")]
+    public List<double> BeatTimestamps { get; set; } = new();
+
+    [JsonPropertyName("scene_context")]
+    public SceneContextDto SceneContext { get; set; } = new();
+
+    [JsonPropertyName("characters")]
+    public List<CharacterProfileDto> Characters { get; set; } = new();
+
+    [JsonPropertyName("scenes")]
+    public List<StorySceneDto> Scenes { get; set; } = new();
+
+    [JsonPropertyName("audit_logs")]
+    public List<AuditLogEntryDto> AuditLogs { get; set; } = new();
 
     [JsonIgnore]
     public string EngineUpper => EngineType.ToUpperInvariant();

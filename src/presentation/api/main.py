@@ -14,18 +14,26 @@ from src.domain.entities.enums import RenderEngineType
 from src.domain.entities.subtitle_segment import SubtitleSegment, WordTimestamp
 from src.presentation.schemas.project_schemas import (
     AudioMasterRequest,
+    BeatCutRequest,
+    CloneProjectRequest,
     ColorGradeRequest,
     ConcatClipsRequest,
     CreateProjectRequest,
+    FxMotionRequest,
     HealthResponse,
     InspectSourceRequest,
+    ManageCharacterRequest,
+    ManageSceneRequest,
     MixAudioRequest,
     ProjectResponse,
     ReframeRequest,
+    SceneContextSchema,
     SnapshotRequest,
+    SoundLibraryRequest,
     SpeedChangeRequest,
     SplitVideoRequest,
     UpdateSubtitlesRequest,
+    VoiceoverRequest,
 )
 
 
@@ -155,11 +163,23 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
                 "kinetix_reframe_video",
                 "kinetix_master_audio",
                 "kinetix_capture_snapshot",
+                "kinetix_clone_project",
+                "kinetix_delete_project",
+                "kinetix_manage_character",
+                "kinetix_manage_scene",
+                "kinetix_generate_voiceover",
+                "kinetix_apply_sound_library",
+                "kinetix_apply_beat_cut",
+                "kinetix_apply_transition_animation",
                 "kinetix_inspect_source",
                 "kinetix_launch_desktop_app",
                 "kinetix_health_check",
             ],
         }
+
+    @app.get("/api/v1/catalog/studio")
+    def get_studio_catalog() -> Dict[str, Any]:
+        return service.get_studio_catalog()
 
     @app.get("/api/v1/projects/{project_id}", response_model=ProjectResponse)
     def get_project(project_id: str) -> ProjectResponse:
@@ -307,6 +327,130 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
     def export_project_subtitles(project_id: str, fmt: str = "srt") -> Dict[str, Any]:
         try:
             return service.export_project_subtitles(project_id=project_id, fmt=fmt)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/clone", response_model=ProjectResponse)
+    def clone_project(project_id: str, request: CloneProjectRequest | None = None) -> ProjectResponse:
+        try:
+            new_id = request.new_project_id if request else None
+            cloned = service.clone_project(project_id=project_id, new_project_id=new_id)
+            return ProjectResponse(**cloned.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/v1/projects/{project_id}")
+    def delete_project(project_id: str) -> Dict[str, Any]:
+        try:
+            return service.delete_project(project_id=project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/context", response_model=ProjectResponse)
+    def update_scene_context(project_id: str, request: SceneContextSchema) -> ProjectResponse:
+        try:
+            updated = service.update_scene_context(project_id=project_id, context_data=request.model_dump())
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/scenes", response_model=ProjectResponse)
+    def manage_scenes(project_id: str, request: ManageSceneRequest) -> ProjectResponse:
+        try:
+            updated = service.manage_scene(
+                project_id=project_id,
+                action=request.action,
+                scene_data=request.scene.model_dump() if request.scene else None,
+                scene_id=request.scene_id,
+                scenes_list=[s.model_dump() for s in request.scenes] if request.scenes is not None else None,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/characters", response_model=ProjectResponse)
+    def manage_characters(project_id: str, request: ManageCharacterRequest) -> ProjectResponse:
+        try:
+            updated = service.manage_character(
+                project_id=project_id,
+                action=request.action,
+                char_data=request.character.model_dump() if request.character else None,
+                character_id=request.character_id,
+                characters_list=[c.model_dump() for c in request.characters] if request.characters is not None else None,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/voiceover", response_model=ProjectResponse)
+    def synthesize_voiceover(project_id: str, request: VoiceoverRequest) -> ProjectResponse:
+        try:
+            updated = service.synthesize_project_voiceover(
+                project_id=project_id,
+                text=request.text,
+                voice_id=request.voice_id,
+                rate=request.rate,
+                pitch_hz=request.pitch_hz,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/sound-library", response_model=ProjectResponse)
+    def apply_sound_library(project_id: str, request: SoundLibraryRequest) -> ProjectResponse:
+        try:
+            updated = service.apply_project_sound_library(
+                project_id=project_id,
+                bgm_preset=request.bgm_preset,
+                bgm_volume=request.bgm_volume,
+                sfx_id=request.sfx_id,
+                sfx_timestamp=request.sfx_timestamp,
+                sfx_volume=request.sfx_volume,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/fx-motion", response_model=ProjectResponse)
+    def apply_fx_motion(project_id: str, request: FxMotionRequest) -> ProjectResponse:
+        try:
+            updated = service.apply_project_fx_motion(
+                project_id=project_id,
+                transition_preset=request.transition_preset,
+                animation_preset=request.animation_preset,
+            )
+            return ProjectResponse(**updated.to_dict())
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/v1/projects/{project_id}/beat-cut", response_model=ProjectResponse)
+    def apply_beat_cut(project_id: str, request: BeatCutRequest) -> ProjectResponse:
+        try:
+            updated = service.apply_project_beat_cut(
+                project_id=project_id,
+                bpm=request.bpm,
+                align_subtitles=request.align_subtitles,
+                pulse_flash=request.pulse_flash,
+            )
+            return ProjectResponse(**updated.to_dict())
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:

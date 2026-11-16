@@ -79,10 +79,18 @@ const hasWinFont = fs.existsSync('C:/Windows/Fonts/segoeui.ttf');
 const fontSpec = hasWinFont ? `fontfile='${winFont}':` : '';
 
 const tpl = String(parsed.template || 'CaptionTemplate');
+const anim = String(propsObj.animation_preset || 'spring_pop');
+const activeChar = Array.isArray(propsObj.characters) && propsObj.characters.length > 0 ? propsObj.characters[0] : null;
+const charLabel = activeChar ? `${activeChar.avatar_badge || 'HOST'} • ${activeChar.name || 'Character'}` : 'STUDIO CHARACTER';
+const charHex = String(activeChar?.theme_color || '#3B82F6').replace('#', '0x');
+
 const filters = [
-  `drawbox=x=40:y=28:w=360:h=40:color=0x131519@0.92:t=fill`,
-  `drawbox=x=40:y=28:w=4:h=40:color=0x2563EB@1.0:t=fill`,
-  `drawtext=${fontSpec}text='REMOTION  |  ${escapeDrawtext(tpl)}':fontcolor=0xE5E7EB:fontsize=18:x=58:y=40`,
+  `drawbox=x=40:y=28:w=440:h=40:color=0x131519@0.92:t=fill`,
+  `drawbox=x=40:y=28:w=4:h=40:color=${charHex}@1.0:t=fill`,
+  `drawtext=${fontSpec}text='REMOTION  |  ${escapeDrawtext(tpl)} (${escapeDrawtext(anim)})':fontcolor=0xE5E7EB:fontsize=16:x=58:y=40`,
+  `drawbox=x=920:y=28:w=320:h=38:color=0x111827@0.92:t=fill`,
+  `drawbox=x=920:y=28:w=4:h=38:color=${charHex}@1.0:t=fill`,
+  `drawtext=${fontSpec}text='${escapeDrawtext(charLabel)}':fontcolor=0x93C5FD:fontsize=15:x=936:y=39`,
 ];
 
 if (tpl === 'SocialPopCaptions') {

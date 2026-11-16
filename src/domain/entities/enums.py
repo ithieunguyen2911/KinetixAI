@@ -49,3 +49,25 @@ class TemplatePreset(str, Enum):
     KINETIC_TITLE = "KineticTitleCard"
     SOCIAL_POP = "SocialPopCaptions"
     TECH_CALLOUT = "TechCalloutHUD"
+
+
+class TransitionPreset(str, Enum):
+    """Supported non-linear video transition presets."""
+
+    NONE = "none"
+    FADE_BLACK = "fade_black"
+    CROSS_DISSOLVE = "cross_dissolve"
+    WIPE_LEFT = "wipe_left"
+    SLIDE_UP = "slide_up"
+    GLITCH_FLASH = "glitch_flash"
+
+
+class AnimationPreset(str, Enum):
+    """Supported camera & motion graphic animation presets."""
+
+    SPRING_POP = "spring_pop"
+    KEN_BURNS_ZOOM = "ken_burns_zoom"
+    TYPEWRITER = "typewriter_reveal"
+    NEON_PULSE = "neon_glow_pulse"
+    SLIDE_BOUNCE = "slide_up_bounce"
+    CAMERA_SHAKE = "camera_shake_impact"

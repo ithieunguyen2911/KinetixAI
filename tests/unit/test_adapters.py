@@ -174,3 +174,45 @@ def test_remotion_and_hyperframes_adapters_render_overlays(tmp_path: Path) -> No
     hf_pop = tmp_path / "hf_social_pop.mp4"
     hyperframes.render_composition("SocialPopCaptions", props, hf_pop)
     assert hf_pop.exists()
+
+
+def test_v3_tts_audio_library_beats_sfx_and_fx_motion(tmp_path: Path) -> None:
+    from src.infrastructure.audio.audio_library_adapter import StudioAudioLibraryAdapter
+    from src.infrastructure.tts.tts_voice_adapter import TtsVoiceAdapter
+
+    downloader = YtDlpAdapter()
+    processor = FfmpegAdapter()
+    tts = TtsVoiceAdapter()
+    audio_lib = StudioAudioLibraryAdapter()
+
+    # 1. Voices, BGM & SFX catalogs + deterministic synthesis
+    assert len(tts.list_voices()) >= 5
+    assert len(audio_lib.list_bgm_presets()) >= 5
+    assert len(audio_lib.list_sfx_presets()) >= 5
+
+    voice_wav = tts.synthesize("Hello Kinetix Studio", tmp_path / "voice.wav", voice_id="win-sapi-studio")
+    assert voice_wav.exists() and voice_wav.stat().st_size > 1000
+
+    bgm_wav = audio_lib.resolve_bgm("bgm_cyber_pulse", tmp_path / "audio", duration_sec=4.0)
+    assert bgm_wav.exists() and bgm_wav.stat().st_size > 1000
+
+    sfx_wav = audio_lib.resolve_sfx("sfx_whoosh_fast", tmp_path / "audio")
+    assert sfx_wav.exists() and sfx_wav.stat().st_size > 500
+
+    # 2. Replace audio track, insert SFX, apply transition + animation, and Beat-Cut
+    raw_video = downloader.download("demo://sample", tmp_path)
+    voiced = processor.replace_audio_track(raw_video, voice_wav, tmp_path / "voiced.mp4")
+    assert voiced.exists()
+
+    with_sfx = processor.insert_sfx_track(voiced, sfx_wav, tmp_path / "sfx.mp4", timestamp_sec=0.5, volume=0.7)
+    assert with_sfx.exists()
+
+    fx_video = processor.apply_transition_and_animation(
+        with_sfx, tmp_path / "fx.mp4", transition_preset="wipe_left", animation_preset="neon_glow_pulse"
+    )
+    assert fx_video.exists()
+
+    beat_video, beats = processor.detect_beats_and_cut(fx_video, tmp_path / "beat.mp4", bpm=120, pulse_flash=True)
+    assert beat_video.exists()
+    assert len(beats) >= 6
+    assert (tmp_path / "beat.beats.json").exists()

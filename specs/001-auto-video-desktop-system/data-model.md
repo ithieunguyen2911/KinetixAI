@@ -1,82 +1,61 @@
-# Phase 1 Data Model: KinetixAI (FlowVids-AI) v2.0 Professional NLE
+# Phase 1 Data Model: KinetixAI (FlowVids-AI) v3.0 — Storyboard, Consistent Character, Audio Studio & Full CRUD NLE
 
 ## 1. Enumerations (`src/domain/entities/enums.py`)
-
-### `RenderEngineType(str, Enum)`
-- `REMOTION = "remotion"`
-- `HYPERFRAMES = "hyperframes"`
-
-### `JobStatus(str, Enum)`
-- `PENDING = "pending"`
-- `DOWNLOADING = "downloading"`
-- `EXTRACTING_AUDIO = "extracting_audio"`
-- `TRANSCRIBING = "transcribing"`
-- `RENDERING_VISUALS = "rendering_visuals"`
-- `MERGING = "merging"`
-- `POST_PROCESSING = "post_processing"`
-- `COMPLETED = "completed"`
-- `FAILED = "failed"`
-
-### `AspectRatioPreset(str, Enum)`
-- `LANDSCAPE_16_9 = "16:9"` (`1280x720`)
-- `VERTICAL_9_16 = "9:16"` (`720x1280` with blurred background canvas)
-- `SQUARE_1_1 = "1:1"` (`1080x1080` / `720x720`)
-
-### `ColorLookPreset(str, Enum)`
-- `NATURAL = "natural"` (Rec.709 neutral)
-- `TEAL_ORANGE = "teal_orange"` (Cinematic Teal & Orange contrast)
-- `WARM_VINTAGE = "warm_vintage"` (Warm golden film grade)
-- `NOIR_BW = "noir_bw"` (High-contrast monochrome B&W)
-- `STUDIO_CRISP = "studio_crisp"` (Enhanced contrast, saturation & unsharp mask)
-
-### `TemplatePreset(str, Enum)`
-- `CAPTION_TEMPLATE = "CaptionTemplate"` (Broadcast Lower-Third + Word Karaoke)
-- `KINETIC_TITLE = "KineticTitleCard"` (Full-screen Intro Title Card + Lower-Third)
-- `SOCIAL_POP = "SocialPopCaptions"` (High-Impact Center/Lower Pop Captions for Shorts/Reels)
-- `TECH_CALLOUT = "TechCalloutHUD"` (Top Callout Badge + Lower-Third + Bottom Progress Bar)
+- `RenderEngineType`: `remotion`, `hyperframes`
+- `JobStatus`: `pending`, `downloading`, `extracting_audio`, `transcribing`, `rendering_visuals`, `merging`, `post_processing`, `completed`, `failed`
+- `AspectRatioPreset`: `16:9`, `9:16`, `1:1`
+- `ColorLookPreset`: `natural`, `teal_orange`, `warm_vintage`, `noir_bw`, `studio_crisp`
+- `TemplatePreset`: `CaptionTemplate`, `KineticTitleCard`, `SocialPopCaptions`, `TechCalloutHUD`
+- `TransitionPreset`: `none`, `fade_black`, `cross_dissolve`, `wipe_left`, `slide_up`, `glitch_flash`
+- `AnimationPreset`: `spring_pop`, `ken_burns_zoom`, `typewriter_reveal`, `neon_glow_pulse`, `slide_up_bounce`, `camera_shake_impact`
 
 ---
 
-## 2. Domain Entities (`src/domain/entities/`)
+## 2. v3.0 Studio & Storyboard Domain Entities (`src/domain/entities/studio_entities.py`)
 
-### `WordTimestamp`
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `word` | `str` | non-empty, stripped | Individual spoken word |
-| `start_time` | `float` | `>= 0.0` | Start timestamp in seconds |
-| `end_time` | `float` | `>= start_time` | End timestamp in seconds |
+### `SceneContext` (Bối cảnh & Phong cách thống nhất)
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `world_setting` | `str` | `"Modern Tech Studio — Dark Slate Workstation"` | Global environment / setting Bible |
+| `visual_style` | `str` | `"Cinematic Clean UI, Subtle Grid, Broadcast Contrast"` | Consistent art direction |
+| `lighting_mood` | `str` | `"Cool Blue Rim Light + High-Contrast Key"` | Consistent lighting spec |
+| `camera_lens` | `str` | `"35mm Anamorphic Wide"` | Virtual lens / framing rule |
+| `continuity_notes` | `str` | `"Keep character palette & typography consistent across cuts."` | Multi-scene continuity notes |
 
-### `SubtitleSegment`
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `start_time` | `float` | `>= 0.0` | Segment start time in seconds |
-| `end_time` | `float` | `> start_time` | Segment end time in seconds |
-| `text` | `str` | non-empty, stripped | Caption text displayed on screen |
-| `words` | `List[WordTimestamp]` | auto-synced via `ensure_word_timestamps()` | Word-level timestamps |
+### `CharacterProfile` (Nhân vật đồng nhất)
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `character_id` | `str` | required | Unique character slug (`char_host`, etc.) |
+| `name` | `str` | required | Display name |
+| `role` | `str` | `"Presenter"` | Narrative role (`Host / Narrator`, `AI Architect`, etc.) |
+| `visual_description` | `str` | `""` | Fixed visual appearance / wardrobe description for continuity |
+| `voice_id` | `str` | `"vi-VN-HoaiMyNeural"` | Bound TTS voice ID |
+| `theme_color` | `str` | `"#3B82F6"` | Hex accent badge color |
+| `avatar_badge` | `str` | `"HOST"` | Short badge label rendered on HUD |
 
-### `ColorGradeSpec` (`src/domain/entities/nle_specs.py`)
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `preset` | `ColorLookPreset` | default `NATURAL` | Named LUT / Color Look preset |
-| `brightness` | `float` | `-1.0 <= val <= 1.0`, default `0.0` | FFmpeg `eq` brightness offset |
-| `contrast` | `float` | `0.2 <= val <= 3.0`, default `1.0` | FFmpeg `eq` contrast multiplier |
-| `saturation` | `float` | `0.0 <= val <= 3.0`, default `1.0` | FFmpeg `eq` saturation multiplier |
-| `gamma` | `float` | `0.2 <= val <= 3.0`, default `1.0` | FFmpeg `eq` gamma |
+### `StoryScene` (Phân cảnh Storyboard — Add / Edit / Clone / Delete)
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `scene_id` | `str` | required | Scene identifier (`scene_01`, etc.) |
+| `title` | `str` | required | Scene title |
+| `setting_context` | `str` | `""` | Scene-specific setting override |
+| `character_id` | `str` | `""` | Linked `CharacterProfile.character_id` |
+| `narration_text` | `str` | `""` | Dialogue / voiceover text |
+| `start_time` | `float` | `0.0` | Timeline start position (seconds) |
+| `duration_sec` | `float` | `2.0` | Scene duration (seconds) |
+| `transition_in` | `str` | `"fade_black"` | Transition preset entering this scene |
+| `animation_preset` | `str` | `"spring_pop"` | Motion/animation preset |
+| `sfx_id` | `str` | `"sfx_whoosh_fast"` | Bound sound effect at scene boundary |
 
-### `VideoProject`
-| Field | Type | Constraints | Description |
-|-------|------|-------------|-------------|
-| `project_id` | `str` | non-empty | Unique project identifier |
-| `source_url` | `str` | non-empty URL, file path, or `demo://sample` | Input video source |
-| `engine_type` | `RenderEngineType` | default `REMOTION` | Selected visual render engine |
-| `template_id` | `str` | default `"CaptionTemplate"` | Composition template identifier |
-| `script_text` | `str \| None` | optional | Optional custom script text |
-| `raw_video_path` | `Path \| None` | optional | Downloaded/ingested source MP4 path |
-| `audio_path` | `Path \| None` | optional | Extracted WAV audio path |
-| `overlay_video_path` | `Path \| None` | optional | Rendered visual overlay MP4 path |
-| `subtitles` | `List[SubtitleSegment]` | default `[]` | Generated timestamped subtitle list |
-| `final_output_path` | `Path \| None` | optional | Active master MP4 video path |
-| `status` | `JobStatus` | default `PENDING` | Current project status |
-| `progress_percent` | `int` | `0..100` | Current pipeline progress percentage |
-| `current_step` | `str` | non-empty | Human-readable active step description |
-| `error_message` | `str \| None` | optional | Error message if failed |
+### `AuditLogEntry` (Nhật ký Log & Lịch sử thao tác)
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `log_id` | `str` | auto | Short log entry ID |
+| `timestamp` | `str` | ISO-8601 / HH:MM:SS | Local execution timestamp |
+| `category` | `str` | `"PIPELINE"` | `PIPELINE`, `NLE`, `AUDIO`, `CONTEXT`, `CHARACTER`, `SCENE`, `SUBTITLE` |
+| `action` | `str` | required | Verb/operation performed |
+| `details` | `str` | required | Detailed parameters & outcome |
+| `status` | `str` | `"OK"` | `OK`, `WARN`, `ERROR` |
+
+### Extended `VideoProject` Aggregate Root (`src/domain/entities/video_project.py`)
+Adds `animation_preset`, `transition_preset`, `voice_id`, `bgm_preset`, `beat_timestamps`, `scene_context: SceneContext`, `characters: List[CharacterProfile]`, `scenes: List[StoryScene]`, `audit_logs: List[AuditLogEntry]`, and `append_log(...)`.

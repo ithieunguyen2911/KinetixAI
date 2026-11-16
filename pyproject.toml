@@ -15,6 +15,7 @@ dependencies = [
     "streamlit>=1.39.0",
     "mcp>=1.2.0",
     "pytest>=8.3.0",
+    "edge-tts>=7.3.1",
 ]
 
 [tool.pytest.ini_options]

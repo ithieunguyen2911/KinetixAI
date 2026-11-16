@@ -105,3 +105,41 @@ description: "Actionable, dependency-ordered task list for KinetixAI (FlowVids-A
   3. **Post-Production FX & Color Grading Dock** (4 Template Presets, 5 Color Grade Looks + Brightness/Contrast/Saturation sliders, Speed Ramping `0.5x`–`2.0x`, Aspect Ratio `16:9` / `9:16` / `1:1`, Silence Jump-Cut, Loudness Normalize, BGM Ducking Mix)
 - [X] T044 [US5] Write unit and integration tests for all new NLE features (`change_speed`, `apply_color_grade`, `reframe_aspect_ratio`, `remove_silences`, `normalize_audio`, `capture_snapshot`, `split_video`, `concat_clips`, `.srt`/`.vtt`/`.transcript.json` export, 4 Motion Templates, FastAPI NLE endpoints, MCP NLE tools) in `tests/unit/test_domain_entities.py`, `tests/unit/test_adapters.py`, `tests/integration/test_fastapi_endpoints.py`, and `tests/integration/test_mcp_server.py`
 - [X] T045 Verify `uv run pytest -v` (100% pass), `dotnet build` (`0 Warning(s), 0 Error(s)`), launch `KinetixAI.Desktop.exe`, and push v2.0 to GitHub
+
+---
+
+## Phase 12: Domain Layer v3.0 — Context Bible, Consistent Characters, Storyboard, Audit Log, Voice/Audio ABCs
+
+- [X] T046 [P] Add `TransitionPreset` and `AnimationPreset` enums in `src/domain/entities/enums.py`, create `SceneContext`, `CharacterProfile`, `StoryScene`, and `AuditLogEntry` dataclasses in `src/domain/entities/studio_entities.py`, and extend `VideoProject` in `src/domain/entities/video_project.py` + `JsonProjectRepository`
+- [X] T047 [P] Define `IVoiceSynthesizer` (`src/domain/interfaces/voice_synthesizer.py`) and `IAudioAssetLibrary` (`src/domain/interfaces/audio_library.py`) ABCs and extend `IVideoProcessor` with `apply_transition_and_animation`, `detect_beats_and_cut`, and `insert_sfx_track`
+
+---
+
+## Phase 13: Infrastructure Adapters v3.0 — Voiceover TTS, BGM/SFX Library, Beat-Cut, Transitions & Motion Engines
+
+- [X] T048 [P] Implement `TtsVoiceAdapter(IVoiceSynthesizer)` in `src/infrastructure/tts/tts_voice_adapter.py` supporting `edge-tts` voices (`vi-VN-HoaiMyNeural`, `vi-VN-NamMinhNeural`, `en-US-AriaNeural`, `en-US-GuyNeural`, `en-US-JennyNeural`, `win-sapi-studio`) with offline Windows `System.Speech` + FFmpeg formant fallback
+- [X] T049 [P] Implement `StudioAudioLibraryAdapter(IAudioAssetLibrary)` in `src/infrastructure/audio/audio_library_adapter.py` providing 5 deterministic BGM tracks & 6 crisp SFX presets via FFmpeg synthesis
+- [X] T050 Implement `apply_transition_and_animation`, `detect_beats_and_cut` (writes `.beats.json`), and `insert_sfx_track` (`adelay`+`amix`) in `src/infrastructure/processors/ffmpeg_adapter.py`, and upgrade `render_engines/remotion_engine/render.mjs` + `render_engines/hyperframes_engine/render.mjs` with Character Consistency HUD + Animation presets
+
+---
+
+## Phase 14: Application & Presentation Layers v3.0 — Full CRUD, Clone, Studio APIs & 22 MCP Tools
+
+- [X] T051 Upgrade `src/application/services/project_service.py` with Project/Scene/Character CRUD + Clone (`clone_project`, `delete_project`, `update_scene_context`, `upsert_scene`, `delete_scene`, `clone_scene`, `upsert_character`, `delete_character`, `clone_character`), `synthesize_project_voiceover`, `apply_project_sfx_or_bgm`, `apply_project_transition_and_animation`, `apply_project_beat_cut`, and automatic structured `AuditLogEntry` tracking
+- [X] T052 [P] Add Pydantic v2 schemas in `src/presentation/schemas/project_schemas.py` and expose REST endpoints (`/catalog/studio`, `/clone`, `DELETE /{id}`, `/context`, `/scenes`, `/characters`, `/voiceover`, `/sound-library`, `/fx-motion`, `/beat-cut`) in `src/presentation/api/main.py`
+- [X] T053 [P] Register 8 new MCP tools (`kinetix_clone_project`, `kinetix_delete_project`, `kinetix_manage_character`, `kinetix_manage_scene`, `kinetix_generate_voiceover`, `kinetix_apply_sound_library`, `kinetix_apply_beat_cut`, `kinetix_apply_transition_animation` — total 22 tools) in `src/presentation/mcp/mcp_server.py`
+
+---
+
+## Phase 15: Native Windows C# .NET WPF Workstation v3.0 — 5-Tab Studio Dock & Beat-Grid Timeline
+
+- [X] T054 Update `desktop_app/KinetixAI.Desktop/Models/ApiModels.cs` with C# DTOs for Context Bible, Consistent Characters, Storyboard Scenes, Audit Logs, Voiceover, Sound Library, FX Motion, and Beat-Cut
+- [X] T055 Upgrade `desktop_app/KinetixAI.Desktop/MainWindow.xaml` and `MainWindow.xaml.cs` with Top FX/Transition/Animation/Clone/Delete bar, Beat Markers track in Multi-Track Timeline, and 5-Tab Studio Dock (1: Subtitles CRUD+Clone, 2: Context & Scenes CRUD+Clone, 3: Consistent Characters CRUD+Clone, 4: Voiceover TTS / BGM / SFX / Beat-Cut Studio, 5: Structured Audit Logs Ledger)
+
+---
+
+## Phase 16: Verification, Legacy SMPTE Purge, Launch & GitHub Push
+
+- [X] T056 Purge legacy SMPTE bar `demo_sample_raw.mp4` caches in `workspace/` and regenerate showcase projects with Dark-Slate Broadcast Canvas + Character HUD + BGM
+- [X] T057 Write comprehensive unit & integration tests for all v3.0 features (`tests/unit/test_domain_entities.py`, `tests/unit/test_adapters.py`, `tests/integration/test_fastapi_endpoints.py`, `tests/integration/test_mcp_server.py`)
+- [X] T058 Verify `uv run pytest -v` (100% pass), `dotnet build` (`0 Warning(s), 0 Error(s)`), launch via `.\run_desktop.ps1`, confirm process alive, mark all tasks `[X]`, and push to GitHub

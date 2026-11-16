@@ -132,6 +132,71 @@ def test_fastapi_health_and_project_lifecycle(tmp_path: Path) -> None:
         assert exp_res.status_code == 200
         assert Path(exp_res.json()["export_path"]).exists()
 
+    # 7c. v3.0 Studio Catalog, Context, Scenes CRUD+Clone, Characters CRUD+Clone, Voiceover, Sound Library, FX, Beat-Cut & Project Clone/Delete
+    catalog_res = client.get("/api/v1/catalog/studio")
+    assert catalog_res.status_code == 200
+    assert len(catalog_res.json()["bgm_presets"]) >= 5
+
+    ctx_res = client.post(
+        "/api/v1/projects/api_test_01/context",
+        json={"world_setting": "Futuristic Broadcast Room", "lighting_mood": "Cyan Key"},
+    )
+    assert ctx_res.status_code == 200
+    assert ctx_res.json()["scene_context"]["world_setting"] == "Futuristic Broadcast Room"
+
+    char_res = client.post(
+        "/api/v1/projects/api_test_01/characters",
+        json={
+            "action": "upsert",
+            "character": {"character_id": "char_vip", "name": "Hieu Nguyen", "role": "Director", "voice_id": "win-sapi-studio"},
+        },
+    )
+    assert char_res.status_code == 200
+    assert any(c["character_id"] == "char_vip" for c in char_res.json()["characters"])
+
+    scene_res = client.post(
+        "/api/v1/projects/api_test_01/scenes",
+        json={
+            "action": "upsert",
+            "scene": {"scene_id": "scene_custom", "title": "Opening Hook", "character_id": "char_vip", "narration_text": "Hook line"},
+        },
+    )
+    assert scene_res.status_code == 200
+    assert any(s["scene_id"] == "scene_custom" for s in scene_res.json()["scenes"])
+
+    vo_res = client.post(
+        "/api/v1/projects/api_test_01/voiceover",
+        json={"voice_id": "win-sapi-studio", "rate": 1.0, "text": "Testing studio voiceover"},
+    )
+    assert vo_res.status_code == 200
+
+    snd_res = client.post(
+        "/api/v1/projects/api_test_01/sound-library",
+        json={"bgm_preset": "bgm_cyber_pulse", "bgm_volume": 0.15, "sfx_id": "sfx_whoosh_fast", "sfx_timestamp": 0.2},
+    )
+    assert snd_res.status_code == 200
+
+    fx_res = client.post(
+        "/api/v1/projects/api_test_01/fx-motion",
+        json={"transition_preset": "fade_black", "animation_preset": "neon_glow_pulse"},
+    )
+    assert fx_res.status_code == 200
+
+    beat_res = client.post(
+        "/api/v1/projects/api_test_01/beat-cut",
+        json={"bpm": 120, "align_subtitles": True, "pulse_flash": True},
+    )
+    assert beat_res.status_code == 200
+    assert len(beat_res.json()["beat_timestamps"]) >= 4
+    assert len(beat_res.json()["audit_logs"]) >= 5
+
+    clone_res = client.post("/api/v1/projects/api_test_01/clone", json={"new_project_id": "api_test_01_cloned"})
+    assert clone_res.status_code == 200
+    assert clone_res.json()["project_id"] == "api_test_01_cloned"
+
+    del_res = client.delete("/api/v1/projects/api_test_01_cloned")
+    assert del_res.status_code == 200 and del_res.json()["deleted"] is True
+
     # 8. Download final video stream
     video_res = client.get("/api/v1/projects/api_test_01/video")
     assert video_res.status_code == 200

@@ -5,13 +5,21 @@ from fastapi.testclient import TestClient
 
 from src.presentation.api.main import create_app
 from src.presentation.mcp.mcp_server import (
+    kinetix_apply_beat_cut,
     kinetix_apply_color_grade,
+    kinetix_apply_sound_library,
+    kinetix_apply_transition_animation,
     kinetix_capture_snapshot,
     kinetix_change_speed,
+    kinetix_clone_project,
+    kinetix_delete_project,
+    kinetix_generate_voiceover,
     kinetix_get_project,
     kinetix_health_check,
     kinetix_inspect_source,
     kinetix_list_projects,
+    kinetix_manage_character,
+    kinetix_manage_scene,
     kinetix_master_audio,
     kinetix_probe_media,
     kinetix_produce_video,
@@ -101,6 +109,55 @@ def test_mcp_server_tools_produce_and_update_video(tmp_path: Path) -> None:
 
     snap = kinetix_capture_snapshot("mcp_ai_demo", timestamp_sec=0.5, workspace_dir=ws)
     assert Path(snap["snapshot_path"]).exists()
+
+    # 7. v3.0 MCP Storyboard, Character, Voiceover, Sound Library, Beat-Cut & Clone/Delete
+    ch = kinetix_manage_character(
+        "mcp_ai_demo",
+        action="upsert",
+        character_id="mcp_char",
+        name="Alex Host",
+        voice_id="win-sapi-studio",
+        workspace_dir=ws,
+    )
+    assert any(c["character_id"] == "mcp_char" for c in ch["characters"])
+
+    sc = kinetix_manage_scene(
+        "mcp_ai_demo",
+        action="upsert",
+        scene_id="mcp_sc1",
+        title="Hook",
+        character_id="mcp_char",
+        workspace_dir=ws,
+    )
+    assert any(s["scene_id"] == "mcp_sc1" for s in sc["scenes"])
+
+    vo = kinetix_generate_voiceover("mcp_ai_demo", voice_id="win-sapi-studio", text="MCP Voiceover OK", workspace_dir=ws)
+    assert Path(vo["final_output_path"]).exists()
+
+    snd = kinetix_apply_sound_library(
+        "mcp_ai_demo",
+        bgm_preset="bgm_lofi_chill",
+        sfx_id="sfx_pop_bubble",
+        sfx_timestamp=0.3,
+        workspace_dir=ws,
+    )
+    assert Path(snd["final_output_path"]).exists()
+
+    fx = kinetix_apply_transition_animation(
+        "mcp_ai_demo",
+        transition_preset="fade_black",
+        animation_preset="spring_pop",
+        workspace_dir=ws,
+    )
+    assert Path(fx["final_output_path"]).exists()
+
+    bc = kinetix_apply_beat_cut("mcp_ai_demo", bpm=120, align_subtitles=True, pulse_flash=True, workspace_dir=ws)
+    assert len(bc["beat_timestamps"]) >= 4
+
+    cloned = kinetix_clone_project("mcp_ai_demo", new_project_id="mcp_ai_copy", workspace_dir=ws)
+    assert cloned["project_id"] == "mcp_ai_copy"
+    deleted = kinetix_delete_project("mcp_ai_copy", workspace_dir=ws)
+    assert deleted["deleted"] is True
 
 
 def test_fastapi_mcp_command_endpoint(tmp_path: Path) -> None:

@@ -4,23 +4,31 @@ from pathlib import Path
 import pytest
 
 from src.domain.entities import (
+    AnimationPreset,
     AspectRatioPreset,
+    AuditLogEntry,
+    CharacterProfile,
     ColorGradeSpec,
     ColorLookPreset,
     JobStatus,
     MediaAsset,
     RenderEngineType,
     RenderJob,
+    SceneContext,
+    StoryScene,
     SubtitleSegment,
     TemplatePreset,
+    TransitionPreset,
     VideoProject,
     WordTimestamp,
 )
 from src.domain.interfaces import (
+    IAudioAssetLibrary,
     IMediaDownloader,
     ITranscriber,
     IVideoProcessor,
     IVisualRenderer,
+    IVoiceSynthesizer,
 )
 
 
@@ -117,3 +125,25 @@ def test_domain_interfaces_cannot_be_instantiated_directly() -> None:
         IVisualRenderer()  # type: ignore[abstract]
     with pytest.raises(TypeError):
         IVideoProcessor()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        IVoiceSynthesizer()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        IAudioAssetLibrary()  # type: ignore[abstract]
+
+
+def test_v3_studio_entities_and_audit_log() -> None:
+    assert TransitionPreset("fade_black") == TransitionPreset.FADE_BLACK
+    assert AnimationPreset("ken_burns_zoom") == AnimationPreset.KEN_BURNS_ZOOM
+
+    ctx = SceneContext(world_setting="Neon Cyber Lab")
+    char = CharacterProfile(character_id="c1", name="Linh Chi", role="Host", voice_id="vi-VN-HoaiMyNeural")
+    scene = StoryScene(scene_id="s1", title="Intro", character_id="c1", narration_text="Hello studio")
+    project = VideoProject(project_id="proj_v3", source_url="demo://sample", scene_context=ctx, characters=[char], scenes=[scene])
+    project.append_log("SCENE", "Add Scene", "Added Intro scene")
+
+    data = project.to_dict()
+    assert data["scene_context"]["world_setting"] == "Neon Cyber Lab"
+    assert len(data["characters"]) == 1
+    assert len(data["scenes"]) == 1
+    assert len(data["audit_logs"]) == 1
+    assert AuditLogEntry.from_dict(data["audit_logs"][0]).action == "Add Scene"

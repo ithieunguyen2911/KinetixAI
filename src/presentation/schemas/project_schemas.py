@@ -1,4 +1,4 @@
-"""Pydantic v2 Data Contracts for FastAPI REST Endpoints and Desktop Client."""
+"""Pydantic v2 Data Contracts for FastAPI REST Endpoints and Desktop Client (v3.0 Studio)."""
 
 from typing import List
 from pydantic import BaseModel, Field
@@ -15,6 +15,46 @@ class SubtitleSegmentSchema(BaseModel):
     end_time: float = Field(gt=0.0)
     text: str = Field(min_length=1)
     words: List[WordTimestampSchema] = Field(default_factory=list)
+
+
+class SceneContextSchema(BaseModel):
+    world_setting: str = "Modern AI Production Studio — Dark Slate Workstation"
+    visual_style: str = "Cinematic Clean UI, Subtle Tech Grid, High Broadcast Contrast"
+    lighting_mood: str = "Cool Cobalt Rim Light + Crisp Key Fill"
+    camera_lens: str = "35mm Anamorphic Studio Framing"
+    continuity_notes: str = "Maintain consistent character badge colors, voice tone, and subtitle styling."
+
+
+class CharacterProfileSchema(BaseModel):
+    character_id: str
+    name: str
+    role: str = "Presenter"
+    visual_description: str = ""
+    voice_id: str = "vi-VN-HoaiMyNeural"
+    theme_color: str = "#3B82F6"
+    avatar_badge: str = "HOST"
+
+
+class StorySceneSchema(BaseModel):
+    scene_id: str
+    title: str
+    setting_context: str = "Main Studio Desk"
+    character_id: str = "char_host"
+    narration_text: str = ""
+    start_time: float = Field(default=0.0, ge=0.0)
+    duration_sec: float = Field(default=2.0, gt=0.1)
+    transition_in: str = "fade_black"
+    animation_preset: str = "spring_pop"
+    sfx_id: str = "sfx_whoosh_fast"
+
+
+class AuditLogEntrySchema(BaseModel):
+    log_id: str = ""
+    timestamp: str = ""
+    category: str = "PIPELINE"
+    action: str = ""
+    details: str = ""
+    status: str = "OK"
 
 
 class CreateProjectRequest(BaseModel):
@@ -34,6 +74,50 @@ class CreateProjectRequest(BaseModel):
         default=None,
         description="Optional script separated by | or newlines (leave empty to auto-transcribe audio with Whisper)",
     )
+
+
+class CloneProjectRequest(BaseModel):
+    new_project_id: str | None = None
+
+
+class ManageSceneRequest(BaseModel):
+    action: str = Field(default="upsert", pattern="^(upsert|delete|clone|replace_all)$")
+    scene_id: str | None = None
+    scene: StorySceneSchema | None = None
+    scenes: List[StorySceneSchema] | None = None
+
+
+class ManageCharacterRequest(BaseModel):
+    action: str = Field(default="upsert", pattern="^(upsert|delete|clone|replace_all)$")
+    character_id: str | None = None
+    character: CharacterProfileSchema | None = None
+    characters: List[CharacterProfileSchema] | None = None
+
+
+class VoiceoverRequest(BaseModel):
+    text: str | None = None
+    voice_id: str = "vi-VN-HoaiMyNeural"
+    rate: float = Field(default=1.0, ge=0.5, le=2.0)
+    pitch_hz: int = Field(default=0, ge=-50, le=50)
+
+
+class SoundLibraryRequest(BaseModel):
+    bgm_preset: str | None = None
+    bgm_volume: float = Field(default=0.18, ge=0.0, le=1.0)
+    sfx_id: str | None = None
+    sfx_timestamp: float = Field(default=0.5, ge=0.0)
+    sfx_volume: float = Field(default=0.65, ge=0.0, le=1.5)
+
+
+class FxMotionRequest(BaseModel):
+    transition_preset: str = "fade_black"
+    animation_preset: str = "spring_pop"
+
+
+class BeatCutRequest(BaseModel):
+    bpm: int = Field(default=120, ge=40, le=240)
+    align_subtitles: bool = True
+    pulse_flash: bool = True
 
 
 class InspectSourceRequest(BaseModel):
@@ -103,6 +187,15 @@ class ProjectResponse(BaseModel):
     progress_percent: int
     current_step: str
     error_message: str | None = None
+    animation_preset: str = "spring_pop"
+    transition_preset: str = "fade_black"
+    voice_id: str = "vi-VN-HoaiMyNeural"
+    bgm_preset: str = "bgm_ambient_pad"
+    beat_timestamps: List[float] = Field(default_factory=list)
+    scene_context: SceneContextSchema = Field(default_factory=SceneContextSchema)
+    characters: List[CharacterProfileSchema] = Field(default_factory=list)
+    scenes: List[StorySceneSchema] = Field(default_factory=list)
+    audit_logs: List[AuditLogEntrySchema] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

@@ -137,3 +137,43 @@ class IVideoProcessor(ABC):
     ) -> Path:
         """Export a single high-resolution PNG frame at timestamp_sec."""
         raise NotImplementedError("capture_snapshot is not implemented by this processor.")
+
+    def replace_audio_track(
+        self,
+        video_path: Path,
+        audio_path: Path,
+        output_path: Path,
+    ) -> Path:
+        """Replace or mux a new spoken voiceover track into video_path."""
+        raise NotImplementedError("replace_audio_track is not implemented by this processor.")
+
+    def insert_sfx_track(
+        self,
+        video_path: Path,
+        sfx_path: Path,
+        output_path: Path,
+        timestamp_sec: float = 0.0,
+        volume: float = 0.65,
+    ) -> Path:
+        """Mix a short sound effect (SFX) into video_path at the exact timestamp_sec."""
+        raise NotImplementedError("insert_sfx_track is not implemented by this processor.")
+
+    def apply_transition_and_animation(
+        self,
+        video_path: Path,
+        output_path: Path,
+        transition_preset: str = "fade_black",
+        animation_preset: str = "spring_pop",
+    ) -> Path:
+        """Apply visual transition and camera/motion animation filters onto video_path."""
+        raise NotImplementedError("apply_transition_and_animation is not implemented by this processor.")
+
+    def detect_beats_and_cut(
+        self,
+        video_path: Path,
+        output_path: Path,
+        bpm: int = 120,
+        pulse_flash: bool = True,
+    ) -> tuple[Path, List[float]]:
+        """Generate BPM beat timestamps (.beats.json) and render rhythmic beat-cut accents."""
+        raise NotImplementedError("detect_beats_and_cut is not implemented by this processor.")
