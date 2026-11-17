@@ -177,3 +177,20 @@ class IVideoProcessor(ABC):
     ) -> tuple[Path, List[float]]:
         """Generate BPM beat timestamps (.beats.json) and render rhythmic beat-cut accents."""
         raise NotImplementedError("detect_beats_and_cut is not implemented by this processor.")
+
+    def render_podcast_video(
+        self,
+        voice_audio_path: Path,
+        output_path: Path,
+        subtitles: List[SubtitleSegment],
+        episode_title: str = "KINETIX PODCAST STUDIO",
+        speaker_label: str = "HOST • NAM MINH",
+        chapters: List[Dict[str, Any]] | None = None,
+        bgm_primary_path: Path | None = None,
+        bgm_secondary_path: Path | None = None,
+        bgm_transition_sec: float | None = None,
+        bgm_volume: float = 0.14,
+        sfx_events: List[Dict[str, Any]] | None = None,
+    ) -> Path:
+        """Render a broadcast-grade 1280x720@30fps Podcast MP4 with live voice waveform, Chapter HUD, wrapped .ass captions, SFX, and 2-stage BGM."""
+        raise NotImplementedError("render_podcast_video is not implemented by this processor.")

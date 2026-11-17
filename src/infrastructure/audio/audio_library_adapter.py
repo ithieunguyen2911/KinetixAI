@@ -10,6 +10,8 @@ from src.domain.interfaces.audio_library import IAudioAssetLibrary
 class StudioAudioLibraryAdapter(IAudioAssetLibrary):
     """Generates and resolves curated royalty-free studio BGM beds & SFX audio cues via FFmpeg synthesis."""
 
+    SAMPLE_RATE: int = 24000
+
     BGM_CATALOG: List[Dict[str, Any]] = [
         {
             "preset_id": "bgm_ambient_pad",
@@ -45,6 +47,36 @@ class StudioAudioLibraryAdapter(IAudioAssetLibrary):
             "bpm": 100,
             "mood": "Dramatic / Reveal",
             "expr": "min(0.9,0.2+0.1*t)*(0.22*sin(2*PI*82.41*t)+0.18*sin(2*PI*123.47*t)+0.12*sin(2*PI*246.94*t))",
+        },
+        {
+            "preset_id": "bgm_piano_melancholic",
+            "name": "Ambient Piano Melancholic (Late Night)",
+            "bpm": 68,
+            "mood": "Melancholic / Storytelling",
+            "post_filter": "lowpass=f=1800,highpass=f=55",
+            "expr": (
+                "min(1,40*mod(t,1.75))*min(1,22*(1.75-mod(t,1.75)))*(0.35+0.65*exp(-1.1*mod(t,1.75)))*("
+                "lt(mod(t,14),3.5)*(0.19*sin(2*PI*110*t)+0.15*sin(2*PI*220*t)+0.14*sin(2*PI*261.63*t)+0.11*sin(2*PI*329.63*t)+0.05*sin(2*PI*493.88*t))"
+                "+gte(mod(t,14),3.5)*lt(mod(t,14),7.0)*(0.19*sin(2*PI*87.31*t)+0.15*sin(2*PI*174.61*t)+0.14*sin(2*PI*220*t)+0.11*sin(2*PI*261.63*t)+0.06*sin(2*PI*329.63*t))"
+                "+gte(mod(t,14),7.0)*lt(mod(t,14),10.5)*(0.19*sin(2*PI*146.83*t)+0.15*sin(2*PI*220*t)+0.13*sin(2*PI*293.66*t)+0.11*sin(2*PI*349.23*t)+0.05*sin(2*PI*261.63*t))"
+                "+gte(mod(t,14),10.5)*(0.19*sin(2*PI*82.41*t)+0.14*sin(2*PI*164.81*t)+0.14*sin(2*PI*207.65*t)+0.11*sin(2*PI*293.66*t)+0.06*sin(2*PI*329.63*t))"
+                ")"
+            ),
+        },
+        {
+            "preset_id": "bgm_inspiring_acoustic",
+            "name": "Inspiring Warm Acoustic & Piano (Hopeful)",
+            "bpm": 76,
+            "mood": "Hopeful / Turnaround",
+            "post_filter": "lowpass=f=2200,highpass=f=65",
+            "expr": (
+                "min(1,45*mod(t,1.6))*min(1,24*(1.6-mod(t,1.6)))*(0.30+0.70*exp(-1.4*mod(t,1.6)))*("
+                "lt(mod(t,12.8),3.2)*(0.18*sin(2*PI*130.81*t)+0.15*sin(2*PI*196*t)+0.14*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.06*sin(2*PI*392*t))"
+                "+gte(mod(t,12.8),3.2)*lt(mod(t,12.8),6.4)*(0.18*sin(2*PI*98*t)+0.15*sin(2*PI*196*t)+0.14*sin(2*PI*246.94*t)+0.12*sin(2*PI*293.66*t)+0.06*sin(2*PI*392*t))"
+                "+gte(mod(t,12.8),6.4)*lt(mod(t,12.8),9.6)*(0.18*sin(2*PI*110*t)+0.15*sin(2*PI*220*t)+0.14*sin(2*PI*261.63*t)+0.11*sin(2*PI*329.63*t)+0.06*sin(2*PI*392*t))"
+                "+gte(mod(t,12.8),9.6)*(0.18*sin(2*PI*87.31*t)+0.15*sin(2*PI*174.61*t)+0.14*sin(2*PI*220*t)+0.12*sin(2*PI*261.63*t)+0.06*sin(2*PI*392*t))"
+                ")"
+            ),
         },
     ]
 
@@ -91,6 +123,33 @@ class StudioAudioLibraryAdapter(IAudioAssetLibrary):
             "duration_sec": 0.65,
             "expr": "0.40*(sin(2*PI*1046.5*t)+0.6*sin(2*PI*1567.98*t))*exp(-4.5*t)",
         },
+        {
+            "sfx_id": "sfx_fan_shutdown",
+            "name": "PC Cooling Fan Spin-Down",
+            "category": "Diegetic / Podcast",
+            "duration_sec": 2.35,
+            "post_filter": "lowpass=f=1500,highpass=f=40,afade=t=in:st=0:d=0.04,afade=t=out:st=2.05:d=0.30",
+            "expr": (
+                "(0.38*sin(2*PI*(45*t+143.33*(1-exp(-1.5*t))))"
+                "+0.18*sin(4*PI*(45*t+143.33*(1-exp(-1.5*t))))"
+                "+0.24*(random(0)-0.5)*exp(-1.3*max(0,t-0.2)))"
+                "*exp(-1.35*max(0,t-0.22))"
+            ),
+        },
+        {
+            "sfx_id": "sfx_phone_vibrate",
+            "name": "Phone Notification Vibrate",
+            "category": "Diegetic / Podcast",
+            "duration_sec": 1.40,
+            "post_filter": "lowpass=f=2800,afade=t=out:st=1.28:d=0.12",
+            "expr": (
+                "0.36*(sin(2*PI*145*t)+0.55*sin(2*PI*290*t)+0.20*sin(2*PI*435*t))"
+                "*(0.82+0.18*sin(2*PI*28*t))"
+                "*(between(t,0.0,0.32)+between(t,0.48,0.80)+between(t,0.96,1.28))"
+                "+0.15*sin(2*PI*880*t)*exp(-14*t)"
+                "+0.17*sin(2*PI*1174.66*t)*exp(-9*max(0,t-0.09))*gt(t,0.09)"
+            ),
+        },
     ]
 
     def list_bgm_presets(self) -> List[Dict[str, Any]]:
@@ -121,15 +180,21 @@ class StudioAudioLibraryAdapter(IAudioAssetLibrary):
         target = output_dir / f"{item['preset_id']}.wav"
         dur = max(2.0, float(duration_sec))
         fade_out_st = max(0.5, dur - 0.8)
+        af_parts: List[str] = []
+        if item.get("post_filter"):
+            af_parts.append(str(item["post_filter"]))
+        af_parts.append(f"afade=t=in:st=0:d=0.4,afade=t=out:st={fade_out_st:.2f}:d=0.8")
         cmd = [
             "ffmpeg",
             "-y",
             "-f",
             "lavfi",
             "-i",
-            f"aevalsrc='{item['expr']}':s=16000:d={dur:.2f}",
+            f"aevalsrc='{item['expr']}':s={self.SAMPLE_RATE}:d={dur:.2f}",
             "-af",
-            f"afade=t=in:st=0:d=0.4,afade=t=out:st={fade_out_st:.2f}:d=0.8",
+            ",".join(af_parts),
+            "-ar",
+            str(self.SAMPLE_RATE),
             "-ac",
             "1",
             "-acodec",
@@ -154,12 +219,20 @@ class StudioAudioLibraryAdapter(IAudioAssetLibrary):
             "-f",
             "lavfi",
             "-i",
-            f"aevalsrc='{item['expr']}':s=16000:d={dur:.2f}",
-            "-ac",
-            "1",
-            "-acodec",
-            "pcm_s16le",
-            str(target),
+            f"aevalsrc='{item['expr']}':s={self.SAMPLE_RATE}:d={dur:.2f}",
         ]
+        if item.get("post_filter"):
+            cmd.extend(["-af", str(item["post_filter"])])
+        cmd.extend(
+            [
+                "-ar",
+                str(self.SAMPLE_RATE),
+                "-ac",
+                "1",
+                "-acodec",
+                "pcm_s16le",
+                str(target),
+            ]
+        )
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return target

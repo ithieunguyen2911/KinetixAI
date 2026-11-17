@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private ProjectResponseDto? _currentProject;
     private int _knownProjectCount;
     private bool _isPlaying;
+    private bool _suppressProjectSelectionChanged;
     private double _videoDurationSeconds = 6.0;
     private string? _selectedClipId;
 
@@ -64,10 +65,10 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        AppendLog("Kinetix Studio v4.0 initialized (Interactive Timeline CRUD, Podcast AI, VoiceStudio Cloning/Design).");
+        AppendLog("Kinetix Studio v5.0 initialized (Interactive Timeline CRUD, Podcast AI, VoiceStudio Cloning/Design).");
         await EnsureBackendRunningAsync();
         await RefreshCustomVoicesAsync();
-        await RefreshProjectsAsync(selectLatestIfNew: true);
+        await RefreshProjectsAsync(selectLatestIfNew: true, forceReloadList: true);
         _mcpSyncTimer.Start();
     }
 
@@ -274,20 +275,24 @@ public partial class MainWindow : Window
         }
 
         var repoRoot = FindRepositoryRoot();
-        AppendLog($"Starting Python FastAPI Core Orchestrator in {repoRoot}...");
+        var venvPython = Path.Combine(repoRoot, ".venv", "Scripts", "python.exe");
+        bool useVenvPython = File.Exists(venvPython);
+        AppendLog($"Starting Python FastAPI Core Orchestrator in {repoRoot} ({(useVenvPython ? ".venv python" : "uv")})...");
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = "uv",
-                Arguments = "run uvicorn src.presentation.api.main:app --host 127.0.0.1 --port 8000",
+                FileName = useVenvPython ? venvPython : "uv",
+                Arguments = useVenvPython
+                    ? "-m uvicorn src.presentation.api.main:app --host 127.0.0.1 --port 8000"
+                    : "run uvicorn src.presentation.api.main:app --host 127.0.0.1 --port 8000",
                 WorkingDirectory = repoRoot,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
             _backendProcess = Process.Start(psi);
 
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 40; i++)
             {
                 await Task.Delay(500);
                 if (await IsBackendHealthyAsync())
@@ -301,7 +306,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppendLog($"Warning: Could not auto-start FastAPI via uv: {ex.Message}");
+            AppendLog($"Warning: Could not auto-start FastAPI backend: {ex.Message}");
         }
 
         TxtBackendStatus.Text = "Core API: Offline";
@@ -366,16 +371,30 @@ public partial class MainWindow : Window
             bool countChanged = forceReloadList || list.Length != ProjectItems.Count;
             if (countChanged)
             {
-                ProjectItems.Clear();
-                foreach (var item in list.Reverse())
+                _suppressProjectSelectionChanged = true;
+                try
                 {
-                    ProjectItems.Add(item);
+                    ProjectItems.Clear();
+                    foreach (var item in list.Reverse())
+                    {
+                        ProjectItems.Add(item);
+                    }
+                    if (_currentProject != null)
+                    {
+                        LstProjects.SelectedItem = ProjectItems.FirstOrDefault(p => p.ProjectId == _currentProject.ProjectId);
+                    }
+                }
+                finally
+                {
+                    _suppressProjectSelectionChanged = false;
                 }
             }
 
             if (list.Length > 0 && (_currentProject == null || (selectLatestIfNew && list.Length > _knownProjectCount)))
             {
-                var newest = list.Last();
+                var newest = _currentProject == null
+                    ? (list.LastOrDefault(p => !string.IsNullOrWhiteSpace(p.FinalOutputPath) && File.Exists(p.FinalOutputPath)) ?? list.Last())
+                    : list.Last();
                 if (_knownProjectCount > 0 && list.Length > _knownProjectCount)
                 {
                     AppendLog($"[MCP Sync] New project synced: '{newest.ProjectId}' ({newest.EngineUpper})");
@@ -420,6 +439,15 @@ public partial class MainWindow : Window
     private async Task BindProjectAsync(ProjectResponseDto project)
     {
         _currentProject = project;
+        _suppressProjectSelectionChanged = true;
+        try
+        {
+            LstProjects.SelectedItem = ProjectItems.FirstOrDefault(p => p.ProjectId == _currentProject?.ProjectId);
+        }
+        finally
+        {
+            _suppressProjectSelectionChanged = false;
+        }
         TxtProjectId.Text = project.ProjectId;
         TxtSourceUrl.Text = project.SourceUrl;
         CmbEngineType.SelectedIndex = project.EngineType == "hyperframes" ? 1 : 0;
@@ -681,18 +709,19 @@ public partial class MainWindow : Window
     {
         var repoRoot = FindRepositoryRoot();
         var docsDir = Path.Combine(repoRoot, "docs");
-        var htmlPath = Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.html");
-        var docxPath = Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.docx");
+        string[] candidates =
+        {
+            Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v5.0.html"),
+            Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.html"),
+            Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v5.0.docx"),
+            Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.docx"),
+        };
 
-        if (File.Exists(htmlPath))
+        var existing = candidates.FirstOrDefault(File.Exists);
+        if (existing != null)
         {
-            Process.Start(new ProcessStartInfo(htmlPath) { UseShellExecute = true });
-            AppendLog($"Opened Enterprise User Guide: {htmlPath}");
-        }
-        else if (File.Exists(docxPath))
-        {
-            Process.Start(new ProcessStartInfo(docxPath) { UseShellExecute = true });
-            AppendLog($"Opened Word User Guide: {docxPath}");
+            Process.Start(new ProcessStartInfo(existing) { UseShellExecute = true });
+            AppendLog($"Opened Enterprise User Guide: {existing}");
         }
         else
         {
@@ -704,6 +733,24 @@ public partial class MainWindow : Window
     // PODCAST & VOICESTUDIO AI (GENERATION / DESIGN / CLONE / DUBBING)
     // ==========================================================
 
+    private void BtnLoadSamplePodcast_Click(object sender, RoutedEventArgs e)
+    {
+        var repoRoot = FindRepositoryRoot();
+        var samplePath = Path.Combine(repoRoot, "docs", "sample_podcast_tap_01_tuoi_30.txt");
+        if (!File.Exists(samplePath))
+        {
+            AppendLog($"Sample podcast script not found: {samplePath}");
+            MessageBox.Show($"Sample podcast script not found:\n{samplePath}", "Sample Script Missing", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        TxtPodcastContent.Text = File.ReadAllText(samplePath, System.Text.Encoding.UTF8).Trim();
+        TxtProjectId.Text = "tap_01_tuoi_30_podcast";
+        SelectComboByTag(CmbPodcastGenre, "late_night_story");
+        SelectComboByTag(CmbPodcastHostVoice, "vi-VN-NamMinhNeural");
+        AppendLog($"Loaded Episode 1 sample podcast ('tap_01_tuoi_30_podcast', genre=late_night_story, host=vi-VN-NamMinhNeural) from {samplePath}.");
+    }
+
     private async void BtnGeneratePodcast_Click(object sender, RoutedEventArgs e)
     {
         BtnGeneratePodcast.IsEnabled = false;
@@ -711,8 +758,10 @@ public partial class MainWindow : Window
         {
             await EnsureBackendRunningAsync();
             await ReleaseVideoPlayerLockAsync();
-            var targetProj = _currentProject?.ProjectId ?? TxtProjectId.Text.Trim();
-            if (string.IsNullOrWhiteSpace(targetProj)) targetProj = "kinetix_podcast_01";
+            var typedId = TxtProjectId.Text.Trim();
+            var targetProj = !string.IsNullOrWhiteSpace(typedId)
+                ? typedId
+                : (_currentProject?.ProjectId ?? "kinetix_podcast_01");
 
             var genre = GetComboTag(CmbPodcastGenre, "podcast_dialogue");
             var hostVoice = GetComboTag(CmbPodcastHostVoice, "vi-VN-HoaiMyNeural");
@@ -1722,7 +1771,9 @@ public partial class MainWindow : Window
 
     private async void LstProjects_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressProjectSelectionChanged) return;
         if (LstProjects.SelectedItem is not ProjectResponseDto selected) return;
+        if (_currentProject != null && string.Equals(_currentProject.ProjectId, selected.ProjectId, StringComparison.Ordinal)) return;
         try
         {
             var proj = await _http.GetFromJsonAsync<ProjectResponseDto>($"/api/v1/projects/{selected.ProjectId}");

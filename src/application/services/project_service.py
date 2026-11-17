@@ -24,6 +24,7 @@ from src.domain.entities.studio_entities import (
 )
 from src.domain.entities.subtitle_segment import SubtitleSegment
 from src.domain.entities.video_project import VideoProject
+from src.domain.services.podcast_script_parser import PodcastScriptParser
 from src.domain.interfaces.audio_library import IAudioAssetLibrary
 from src.domain.interfaces.media_downloader import IMediaDownloader
 from src.domain.interfaces.transcriber import ITranscriber
@@ -1049,77 +1050,77 @@ class ProjectService:
         guest_voice_id: str = "vi-VN-NamMinhNeural",
         bgm_volume: float = 0.14,
     ) -> VideoProject:
-        """Transform user text/story into a multi-voice expressive Podcast/Audiobook & render full MP4."""
-        import re
-
-        project = self.repository.get(project_id)
-        if not project:
-            # Auto-create a showcase workspace project if project_id does not yet exist
-            project = self.create_and_run_project(
-                project_id=project_id,
-                source_url="demo://sample",
-                engine_type="hyperframes",
-                template_id="KineticTitleCard",
-                script_text="Kinetix Podcast Studio",
-            )
-
-        clean_input = raw_content.strip()
+        """Transform user text or structured production script into an expressive Podcast/Audiobook & render broadcast MP4."""
+        clean_input = (raw_content or "").strip()
         if not clean_input:
             raise ValueError("Podcast content must not be empty.")
 
-        # Split user input by newline / '|' / sentence boundaries into coherent turns
-        raw_lines = [p.strip() for ln in clean_input.splitlines() for p in ln.split("|") if p.strip()]
-        if len(raw_lines) == 1:
-            sentence_parts = [s.strip() for s in re.split(r"(?<=[.!?।])\s+", raw_lines[0]) if s.strip()]
-            if len(sentence_parts) > 1:
-                raw_lines = sentence_parts
-
-        genre_map = {
-            "podcast_dialogue": {"emotion": "warm", "bgm": "bgm_lofi_chill", "pause": 350, "two_speakers": True},
-            "late_night_story": {"emotion": "late_night", "bgm": "bgm_ambient_pad", "pause": 550, "two_speakers": False},
-            "thriller_mystery": {"emotion": "mysterious", "bgm": "bgm_dramatic_rise", "pause": 480, "two_speakers": False},
-            "audiobook_narration": {"emotion": "calm", "bgm": "bgm_ambient_pad", "pause": 420, "two_speakers": False},
-            "tech_explainer": {"emotion": "excited", "bgm": "bgm_cyber_pulse", "pause": 300, "two_speakers": True},
-            "motivational_epic": {"emotion": "dramatic", "bgm": "bgm_dramatic_rise", "pause": 400, "two_speakers": False},
-        }
-        cfg = genre_map.get(genre.strip().lower(), genre_map["podcast_dialogue"])
-
-        turns: List[PodcastTurn] = []
-        for idx, line in enumerate(raw_lines):
-            if ":" in line and len(line.split(":", 1)[0]) <= 24:
-                spk_raw, body = line.split(":", 1)
-                spk_name = spk_raw.strip()
-                voice = guest_voice_id if (idx % 2 == 1 and cfg["two_speakers"]) else host_voice_id
-                text_body = body.strip()
-            else:
-                use_guest = bool(cfg["two_speakers"] and idx % 2 == 1)
-                spk_name = "Guest" if use_guest else "Host"
-                voice = guest_voice_id if use_guest else host_voice_id
-                text_body = line
-            turns.append(
-                PodcastTurn(
-                    turn_id=f"turn_{idx + 1:02d}",
-                    speaker_name=spk_name,
-                    voice_id=voice,
-                    emotion=str(cfg["emotion"]),
-                    text=text_body,
-                    pause_after_ms=int(cfg["pause"]),
-                )
-            )
-
-        project_dir = self.workspace_root / project.project_id
-        podcast_wav = project_dir / "assets" / "audio" / f"{project.project_id}_podcast.wav"
-        stitched_wav, timed_segs = self.voice_synthesizer.synthesize_podcast_script(
-            turns=[t.to_dict() for t in turns],
-            output_path=podcast_wav,
+        parsed = PodcastScriptParser.parse(
+            raw_content=clean_input,
             genre=genre,
+            host_voice_id=host_voice_id,
+            guest_voice_id=guest_voice_id,
         )
 
-        # Rebuild SubtitleSegments, StoryScenes, and TimelineClips synced 1:1 to voice durations
-        project.podcast_turns = turns
+        project = self.repository.get(project_id)
+        if not project:
+            project = VideoProject(
+                project_id=project_id,
+                source_url="podcast://studio",
+                engine_type=RenderEngineType.HYPERFRAMES,
+                template_id="KineticTitleCard",
+                script_text=parsed.episode_title,
+                voice_id=parsed.recommended_voice_id,
+            )
+            self.repository.save(project)
+
+        genre_bgm_map = {
+            "podcast_dialogue": "bgm_lofi_chill",
+            "late_night_story": "bgm_piano_melancholic",
+            "thriller_mystery": "bgm_dramatic_rise",
+            "audiobook_narration": "bgm_piano_melancholic",
+            "tech_explainer": "bgm_cyber_pulse",
+            "motivational_epic": "bgm_inspiring_acoustic",
+        }
+        primary_bgm_id = (
+            parsed.primary_bgm
+            if parsed.is_structured_narrative
+            else genre_bgm_map.get(genre.strip().lower(), "bgm_lofi_chill")
+        )
+
+        domain_turns: List[PodcastTurn] = [
+            PodcastTurn(
+                turn_id=t.turn_id,
+                speaker_name=t.speaker_name,
+                voice_id=t.voice_id,
+                emotion=t.emotion,
+                text=t.caption_text,
+                pause_after_ms=t.pause_after_ms,
+            )
+            for t in parsed.turns
+        ]
+
+        project.status = JobStatus.TRANSCRIBING
+        project.progress_percent = 35
+        project.current_step = f"Synthesizing Podcast Voice ({len(parsed.turns)} phrases)..."
+        self.repository.save(project)
+
+        project_dir = self.workspace_root / project.project_id
+        audio_dir = project_dir / "assets" / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        podcast_wav = audio_dir / f"{project.project_id}_podcast.wav"
+
+        eff_genre = "late_night_story" if parsed.is_structured_narrative else genre
+        stitched_wav, timed_segs = self.voice_synthesizer.synthesize_podcast_script(
+            turns=[t.to_dict() for t in parsed.turns],
+            output_path=podcast_wav,
+            genre=eff_genre,
+        )
+
+        # Rebuild SubtitleSegments synced 1:1 to synthesized voice durations
+        project.podcast_turns = domain_turns
         project.subtitles = []
-        project.scenes = []
-        for idx, seg_info in enumerate(timed_segs, start=1):
+        for seg_info in timed_segs:
             sub = SubtitleSegment(
                 start_time=float(seg_info["start_time"]),
                 end_time=float(seg_info["end_time"]),
@@ -1127,66 +1128,199 @@ class ProjectService:
             )
             sub.ensure_word_timestamps()
             project.subtitles.append(sub)
-            project.scenes.append(
-                StoryScene(
-                    scene_id=f"pod_scene_{idx:02d}",
-                    title=f"{seg_info['speaker_name']} #{idx}",
-                    setting_context=f"{genre} • Studio",
-                    character_id=project.characters[idx % len(project.characters)].character_id if project.characters else "char_host",
-                    narration_text=str(seg_info["text"]),
-                    start_time=float(seg_info["start_time"]),
-                    duration_sec=max(0.3, round(float(seg_info["end_time"]) - float(seg_info["start_time"]), 3)),
-                    transition_in=project.transition_preset,
-                    animation_preset=project.animation_preset,
-                )
-            )
 
         total_dur = max(2.0, project.subtitles[-1].end_time if project.subtitles else 6.0)
         project.audio_path = stitched_wav
+        project.voice_id = parsed.recommended_voice_id
+
+        # Compute exact start_time / end_time for each Chapter from timed_segs
+        chapter_dicts: List[Dict[str, Any]] = []
+        for idx, chap in enumerate(parsed.chapters):
+            chap_segs = [
+                s for s in timed_segs if int(s.get("chapter_index", 0)) == chap.chapter_index
+            ]
+            if idx == 0:
+                chap.start_time = 0.0
+            elif chap_segs:
+                chap.start_time = float(chap_segs[0]["start_time"])
+                if chapter_dicts:
+                    chapter_dicts[-1]["end_time"] = round(chap.start_time, 3)
+                    parsed.chapters[idx - 1].end_time = chap.start_time
+            else:
+                chap.start_time = chapter_dicts[-1]["end_time"] if chapter_dicts else 0.0
+
+            chap.end_time = float(chap_segs[-1]["end_time"]) if chap_segs else total_dur
+            chapter_dicts.append(chap.to_dict())
+
+        if chapter_dicts:
+            chapter_dicts[-1]["end_time"] = round(total_dur, 3)
+            parsed.chapters[-1].end_time = total_dur
+
+        # Populate StoryScenes from Chapters (or turns for short dialogues)
+        project.scenes = []
+        if parsed.is_structured_narrative and parsed.chapters:
+            for idx, chap in enumerate(parsed.chapters, start=1):
+                chap_sfx = next(
+                    (c.sfx_id for c in parsed.sfx_cues if c.chapter_index == chap.chapter_index),
+                    "none",
+                )
+                project.scenes.append(
+                    StoryScene(
+                        scene_id=f"chap_{idx:02d}",
+                        title=chap.title,
+                        setting_context=f"{parsed.episode_title} • {chap.mood.upper()}",
+                        character_id=project.characters[0].character_id if project.characters else "char_host",
+                        narration_text=f"[{chap.bgm_preset}] {chap.title}",
+                        start_time=round(chap.start_time, 3),
+                        duration_sec=max(0.5, round(chap.end_time - chap.start_time, 3)),
+                        transition_in="cross_dissolve" if chap.mood == "hopeful" else "fade_black",
+                        animation_preset="spring_pop",
+                        sfx_id=chap_sfx,
+                    )
+                )
+        else:
+            for idx, seg_info in enumerate(timed_segs, start=1):
+                project.scenes.append(
+                    StoryScene(
+                        scene_id=f"pod_scene_{idx:02d}",
+                        title=f"{seg_info['speaker_name']} #{idx}",
+                        setting_context=f"{genre} • Studio",
+                        character_id=project.characters[idx % len(project.characters)].character_id if project.characters else "char_host",
+                        narration_text=str(seg_info["text"]),
+                        start_time=float(seg_info["start_time"]),
+                        duration_sec=max(0.3, round(float(seg_info["end_time"]) - float(seg_info["start_time"]), 3)),
+                        transition_in=project.transition_preset,
+                        animation_preset=project.animation_preset,
+                    )
+                )
+
+        # Resolve BGM transition point & SFX events
+        bgm_transition_sec: float | None = None
+        if (
+            parsed.bgm_transition_chapter_index is not None
+            and 0 <= parsed.bgm_transition_chapter_index < len(parsed.chapters)
+        ):
+            bgm_transition_sec = round(parsed.chapters[parsed.bgm_transition_chapter_index].start_time, 3)
+
+        bgm_primary_dur = (bgm_transition_sec + 4.0) if bgm_transition_sec else (total_dur + 1.0)
+        bgm_primary_wav = self.audio_library.resolve_bgm(
+            primary_bgm_id,
+            audio_dir,
+            duration_sec=bgm_primary_dur,
+        )
+        bgm_secondary_wav: Path | None = None
+        if bgm_transition_sec is not None:
+            bgm_secondary_wav = self.audio_library.resolve_bgm(
+                parsed.secondary_bgm,
+                audio_dir,
+                duration_sec=max(4.0, total_dur - bgm_transition_sec + 3.0),
+            )
+
+        sfx_events: List[Dict[str, Any]] = []
+        beat_markers: List[float] = []
+        for cue in parsed.sfx_cues:
+            chap_start = (
+                parsed.chapters[cue.chapter_index].start_time
+                if 0 <= cue.chapter_index < len(parsed.chapters)
+                else 0.0
+            )
+            ts = round(chap_start + cue.offset_sec, 3)
+            sfx_wav = self.audio_library.resolve_sfx(cue.sfx_id, audio_dir)
+            sfx_events.append(
+                {
+                    "sfx_id": cue.sfx_id,
+                    "path": sfx_wav,
+                    "timestamp_sec": ts,
+                    "volume": cue.volume,
+                }
+            )
+            beat_markers.append(ts)
+        for ch in parsed.chapters[1:]:
+            beat_markers.append(round(ch.start_time, 3))
+        project.beat_timestamps = sorted(set(beat_markers))
+
         project.timeline_clips = []
         project.ensure_timeline_clips(total_dur)
 
-        # Extend base video smoothly to podcast length, replace audio, render overlay & mix genre BGM
-        base_for_audio = project.raw_video_path
-        if not base_for_audio or not base_for_audio.exists():
-            base_for_audio = self.downloader.download("demo://sample", project_dir)
-            project.raw_video_path = base_for_audio
+        project.status = JobStatus.RENDERING_VISUALS
+        project.progress_percent = 78
+        project.current_step = "Rendering Broadcast Podcast Video & Waveform..."
+        self.repository.save(project)
 
-        voiced_base = project_dir / f"{project.project_id}_pod_base.mp4"
-        voiced_base = self.processor.replace_audio_track(base_for_audio, stitched_wav, voiced_base)
-
-        renderer = RendererFactory.get_renderer(project.engine_type)
-        overlay_target = project_dir / f"{project.project_id}_overlay.mp4"
-        props = {
-            "project_id": project.project_id,
-            "engine": project.engine_type.value,
-            "animation_preset": project.animation_preset,
-            "scene_context": project.scene_context.to_dict(),
-            "characters": [c.to_dict() for c in project.characters],
-            "duration_seconds": total_dur,
-            "subtitles": [s.to_dict() for s in project.subtitles],
-        }
-        project.overlay_video_path = renderer.render_composition(project.template_id, props, overlay_target)
-
-        merged_out = project_dir / f"{project.project_id}_pod_merged.mp4"
-        merged_out = self.processor.merge_and_export(
-            voiced_base,
-            project.overlay_video_path,
-            merged_out,
-            subtitles=project.subtitles,
+        voice_short = "NAM MINH" if "NamMinh" in project.voice_id else (
+            "HOAI MY" if "HoaiMy" in project.voice_id else project.voice_id[:16].upper()
         )
-
-        bgm_wav = self.audio_library.resolve_bgm(str(cfg["bgm"]), project_dir / "assets" / "audio", duration_sec=total_dur)
+        speaker_badge = f"VOICE • {voice_short}"
         final_pod = project_dir / f"{project.project_id}_podcast_final.mp4"
-        project.final_output_path = self.processor.mix_audio_tracks(merged_out, bgm_wav, final_pod, bg_volume=bgm_volume)
-        project.bgm_preset = str(cfg["bgm"])
+
+        try:
+            rendered_mp4 = self.processor.render_podcast_video(
+                voice_audio_path=stitched_wav,
+                output_path=final_pod,
+                subtitles=project.subtitles,
+                episode_title=parsed.episode_title,
+                speaker_label=speaker_badge,
+                chapters=chapter_dicts,
+                bgm_primary_path=bgm_primary_wav,
+                bgm_secondary_path=bgm_secondary_wav,
+                bgm_transition_sec=bgm_transition_sec,
+                bgm_volume=bgm_volume,
+                sfx_events=sfx_events,
+            )
+            project.final_output_path = rendered_mp4
+            if not project.raw_video_path or not project.raw_video_path.exists():
+                project.raw_video_path = rendered_mp4
+        except NotImplementedError:
+            # Fallback path for mock IVideoProcessor implementations in unit tests
+            base_for_audio = project.raw_video_path
+            if not base_for_audio or not base_for_audio.exists():
+                base_for_audio = self.downloader.download("demo://sample", project_dir)
+                project.raw_video_path = base_for_audio
+            voiced_base = project_dir / f"{project.project_id}_pod_base.mp4"
+            voiced_base = self.processor.replace_audio_track(base_for_audio, stitched_wav, voiced_base)
+            renderer = RendererFactory.get_renderer(project.engine_type)
+            overlay_target = project_dir / f"{project.project_id}_overlay.mp4"
+            props = {
+                "project_id": project.project_id,
+                "engine": project.engine_type.value,
+                "animation_preset": project.animation_preset,
+                "scene_context": project.scene_context.to_dict(),
+                "characters": [c.to_dict() for c in project.characters],
+                "duration_seconds": total_dur,
+                "subtitles": [s.to_dict() for s in project.subtitles],
+            }
+            project.overlay_video_path = renderer.render_composition(project.template_id, props, overlay_target)
+            merged_out = project_dir / f"{project.project_id}_pod_merged.mp4"
+            merged_out = self.processor.merge_and_export(
+                voiced_base,
+                project.overlay_video_path,
+                merged_out,
+                subtitles=project.subtitles,
+            )
+            project.final_output_path = self.processor.mix_audio_tracks(
+                merged_out,
+                bgm_primary_wav,
+                final_pod,
+                bg_volume=bgm_volume,
+            )
+
+        project.bgm_preset = (
+            f"{primary_bgm_id} -> {parsed.secondary_bgm}"
+            if bgm_secondary_wav is not None
+            else primary_bgm_id
+        )
         project.status = JobStatus.COMPLETED
         project.progress_percent = 100
-        project.current_step = f"Podcast Ready ({genre} • {len(turns)} turns • {total_dur:.1f}s)"
+        project.current_step = (
+            f"Podcast Ready ({len(parsed.chapters)} chapters • {len(parsed.turns)} cues • {total_dur:.1f}s)"
+        )
         project.append_log(
             "PODCAST",
-            f"Generate Podcast ({genre})",
-            f"Synthesized {len(turns)} multi-voice turns ({host_voice_id} / {guest_voice_id}) + BGM '{cfg['bgm']}'.",
+            f"Produce Podcast ({parsed.episode_title[:36]})",
+            (
+                f"Voice='{project.voice_id}', Chapters={len(parsed.chapters)}, "
+                f"Cues={len(parsed.turns)}, SFX={len(sfx_events)}, BGM='{project.bgm_preset}', Dur={total_dur:.1f}s."
+            ),
         )
         return self.repository.save(project)
 

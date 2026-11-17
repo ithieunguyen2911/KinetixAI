@@ -38,10 +38,39 @@ function escapeHtml(str) {
 function escapeDrawtext(text) {
   return String(text || '')
     .replace(/\\/g, '\\\\')
+    .replace(/'/g, '’')
     .replace(/:/g, '\\:')
-    .replace(/'/g, '')
     .replace(/%/g, '\\%')
-    .replace(/,/g, '\\,');
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+}
+
+function wrapSubtitleLines(text, maxChars = 48) {
+  const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return [];
+  const words = cleaned.split(' ');
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if (current.length + 1 + word.length <= maxChars) {
+      current += ` ${word}`;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length <= 3) return lines;
+  const head = lines.slice(0, 2);
+  let tail = lines.slice(2).join(' ');
+  if (tail.length > maxChars + 10) {
+    tail = `${tail.slice(0, maxChars + 7).trimEnd()}…`;
+  }
+  return [...head, tail];
 }
 
 const parsed = parseArgs(process.argv);
@@ -73,8 +102,9 @@ const clipDivs = subtitles
   .map((seg, i) => {
     const start = Math.max(0.05, Number(seg.start_time || 0)).toFixed(2);
     const dur = Math.max(0.2, Number(seg.end_time || 2) - Number(seg.start_time || 0)).toFixed(2);
+    const wrappedHtml = wrapSubtitleLines(seg.text, 48).map(escapeHtml).join('<br/>');
     return `    <div id="cap-clip-${i}" class="clip caption-clip" data-start="${start}" data-duration="${dur}" data-track-index="1">
-      <div id="cap-box-${i}" class="caption-scrim">${escapeHtml(seg.text)}</div>
+      <div id="cap-box-${i}" class="caption-scrim">${wrappedHtml}</div>
     </div>`;
   })
   .join('\n');
@@ -124,15 +154,18 @@ const rootHtml = `<!DOCTYPE html>
 const captionsSceneHtml = `<template>
   <style>
     #root { position: absolute; inset: 0; font-family: "Inter", sans-serif; }
-    .caption-clip { position: absolute; left: 0; right: 0; bottom: 84px; text-align: center; overflow: visible; }
+    .caption-clip { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center; overflow: visible; }
     .caption-scrim {
       display: inline-block;
+      max-width: 1040px;
+      white-space: normal;
+      line-height: 1.35;
       background: rgba(15, 17, 23, 0.88);
       border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 10px;
       padding: 14px 28px;
       color: #F9FAFB;
-      font-size: 34px;
+      font-size: 30px;
       font-weight: 700;
     }
   </style>
@@ -192,32 +225,42 @@ const filters = [
 ];
 
 if (tpl === 'SocialPopCaptions') {
-  filters.push(`drawbox=x=180:y=470:w=920:h=118:color=0x0F172A@0.94:t=fill`);
-  filters.push(`drawbox=x=180:y=470:w=920:h=4:color=0xF59E0B@1.0:t=fill`);
+  filters.push(`drawbox=x=140:y=464:w=1000:h=128:color=0x0F172A@0.94:t=fill`);
+  filters.push(`drawbox=x=140:y=464:w=1000:h=4:color=0xF59E0B@1.0:t=fill`);
 } else if (tpl === 'KineticTitleCard') {
-  filters.push(`drawbox=x=100:y=568:w=1080:h=104:color=0x131519@0.92:t=fill`);
-  filters.push(`drawbox=x=100:y=568:w=1080:h=3:color=0x10B981@1.0:t=fill`);
+  filters.push(`drawbox=x=100:y=552:w=1080:h=124:color=0x131519@0.92:t=fill`);
+  filters.push(`drawbox=x=100:y=552:w=1080:h=3:color=0x10B981@1.0:t=fill`);
   filters.push(`drawbox=x=240:y=170:w=800:h=130:color=0x111827@0.94:t=fill:enable='between(t\\,0\\,1.8)'`);
   filters.push(`drawtext=${fontSpec}text='KINETIX STUDIO PRESENTATION':fontcolor=0x10B981:fontsize=34:x=(w-text_w)/2:y=218:enable='between(t\\,0\\,1.8)'`);
 } else if (tpl === 'TechCalloutHUD') {
-  filters.push(`drawbox=x=100:y=568:w=1080:h=104:color=0x131519@0.92:t=fill`);
-  filters.push(`drawbox=x=100:y=568:w=1080:h=3:color=0x38BDF8@1.0:t=fill`);
+  filters.push(`drawbox=x=100:y=552:w=1080:h=124:color=0x131519@0.92:t=fill`);
+  filters.push(`drawbox=x=100:y=552:w=1080:h=3:color=0x38BDF8@1.0:t=fill`);
   filters.push(`drawbox=x=0:y=712:w='min(1280,1280*(t/${duration}))':h=8:color=0x38BDF8@1.0:t=fill`);
 } else {
-  filters.push(`drawbox=x=100:y=568:w=1080:h=104:color=0x131519@0.92:t=fill`);
-  filters.push(`drawbox=x=100:y=568:w=1080:h=3:color=0x3B82F6@1.0:t=fill`);
+  filters.push(`drawbox=x=100:y=552:w=1080:h=124:color=0x131519@0.92:t=fill`);
+  filters.push(`drawbox=x=100:y=552:w=1080:h=3:color=0x3B82F6@1.0:t=fill`);
 }
 
-const textY = tpl === 'SocialPopCaptions' ? 514 : 606;
+const boxY = tpl === 'SocialPopCaptions' ? 464 : 552;
+const boxH = tpl === 'SocialPopCaptions' ? 128 : 124;
 for (const seg of subtitles) {
   const start = Number(seg.start_time || 0).toFixed(2);
   const end = Number(seg.end_time || 2).toFixed(2);
-  const safeText = escapeDrawtext(seg.text);
-  if (safeText) {
-    filters.push(
-      `drawtext=${fontSpec}text='${safeText}':fontcolor=white:fontsize=31:x=(w-text_w)/2:y=${textY}:enable='between(t\\,${start}\\,${end})'`
-    );
-  }
+  const wrappedLines = wrapSubtitleLines(seg.text, 48);
+  if (wrappedLines.length === 0) continue;
+  const fontSize = wrappedLines.length >= 2 ? 26 : 30;
+  const lineStep = wrappedLines.length >= 3 ? 33 : 36;
+  const totalBlockH = (wrappedLines.length - 1) * lineStep + fontSize;
+  const startY = Math.round(boxY + (boxH - totalBlockH) / 2);
+  wrappedLines.forEach((line, lineIdx) => {
+    const safeLine = escapeDrawtext(line);
+    if (safeLine) {
+      const lineY = startY + lineIdx * lineStep;
+      filters.push(
+        `drawtext=${fontSpec}text='${safeLine}':fontcolor=white:fontsize=${fontSize}:x=(w-text_w)/2:y=${lineY}:enable='between(t\\,${start}\\,${end})'`
+      );
+    }
+  });
 }
 
 const ffmpegArgs = [

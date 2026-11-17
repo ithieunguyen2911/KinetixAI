@@ -1,7 +1,7 @@
 <Window x:Class="KinetixAI.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinetix Studio v4.0 — AI Storyboard, Podcast, VoiceStudio &amp; Multi-Track NLE Workstation"
+        Title="Kinetix Studio v5.0 — AI Storyboard, Podcast, VoiceStudio &amp; Multi-Track NLE Workstation"
         Height="960" Width="1640"
         MinHeight="800" MinWidth="1360"
         WindowStartupLocation="CenterScreen"
@@ -165,7 +165,7 @@
                     <Border Width="8" Height="18" Background="{StaticResource AccentPrimary}" CornerRadius="2" Margin="0,0,8,0"/>
                     <TextBlock Text="KINETIX STUDIO" FontSize="13" FontWeight="Bold" Foreground="#F9FAFB" VerticalAlignment="Center"/>
                     <Border Background="#181C26" BorderBrush="#282E3D" BorderThickness="1" CornerRadius="3" Padding="6,2" Margin="7,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="v4.0 NLE" FontSize="10" Foreground="#60A5FA" FontFamily="Consolas" FontWeight="Bold"/>
+                        <TextBlock Text="v5.0 NLE" FontSize="10" Foreground="#60A5FA" FontFamily="Consolas" FontWeight="Bold"/>
                     </Border>
                 </StackPanel>
 
@@ -261,7 +261,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="Project ID" Foreground="#9CA3AF" FontSize="10" Margin="0,0,0,2"/>
-                                <TextBox x:Name="TxtProjectId" Text="studio_master_v4" Style="{StaticResource StudioTextBox}"/>
+                                <TextBox x:Name="TxtProjectId" Text="studio_master_v5" Style="{StaticResource StudioTextBox}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="Render Engine" Foreground="#9CA3AF" FontSize="10" Margin="0,0,0,2"/>
@@ -868,6 +868,8 @@
                                         <TextBlock Text="2. THƯ VIỆN NHẠC NỀN (BGM)" FontSize="9.5" FontWeight="Bold" Foreground="#34D399" Margin="0,0,0,5"/>
                                         <ComboBox x:Name="CmbBgmPreset" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,5">
                                             <ComboBoxItem Content="bgm_ambient_pad (Studio Warm)" Tag="bgm_ambient_pad"/>
+                                            <ComboBoxItem Content="bgm_piano_melancholic (Late-Night Piano)" Tag="bgm_piano_melancholic"/>
+                                            <ComboBoxItem Content="bgm_inspiring_acoustic (Warm Acoustic)" Tag="bgm_inspiring_acoustic"/>
                                             <ComboBoxItem Content="bgm_cyber_pulse (Tech 120 BPM)" Tag="bgm_cyber_pulse"/>
                                             <ComboBoxItem Content="bgm_lofi_chill (Lo-Fi Narrative)" Tag="bgm_lofi_chill"/>
                                             <ComboBoxItem Content="bgm_news_broadcast (News 128 BPM)" Tag="bgm_news_broadcast"/>
@@ -885,6 +887,8 @@
                                         <TextBlock Text="3. HIỆU ỨNG ÂM THANH (SFX)" FontSize="9.5" FontWeight="Bold" Foreground="#FBBF24" Margin="0,0,0,5"/>
                                         <ComboBox x:Name="CmbSfxPreset" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,5">
                                             <ComboBoxItem Content="sfx_whoosh_fast (Transition Whoosh)" Tag="sfx_whoosh_fast"/>
+                                            <ComboBoxItem Content="sfx_fan_shutdown (PC Fan Spin-Down)" Tag="sfx_fan_shutdown"/>
+                                            <ComboBoxItem Content="sfx_phone_vibrate (Phone Vibrate)" Tag="sfx_phone_vibrate"/>
                                             <ComboBoxItem Content="sfx_pop_bubble (Caption Pop)" Tag="sfx_pop_bubble"/>
                                             <ComboBoxItem Content="sfx_glitch_digital (Digital Zap)" Tag="sfx_glitch_digital"/>
                                             <ComboBoxItem Content="sfx_cinematic_hit (Impact Boom)" Tag="sfx_cinematic_hit"/>
@@ -944,7 +948,12 @@
                                             <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <TextBlock Grid.Row="0" Text="TẠO PODCAST &amp; KỂ CHUYỆN ĐA THỂ LOẠI" FontSize="9.5" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,4"/>
+                                        <Grid Grid.Row="0" Margin="0,0,0,4">
+                                            <TextBlock Text="TẠO PODCAST &amp; KỂ CHUYỆN ĐA THỂ LOẠI" FontSize="9.5" FontWeight="Bold" Foreground="#60A5FA" VerticalAlignment="Center"/>
+                                            <Button x:Name="BtnLoadSamplePodcast" Content="Nạp Tập 1 Mẫu" Click="BtnLoadSamplePodcast_Click"
+                                                    Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="9.5" HorizontalAlignment="Right"
+                                                    ToolTip="Nạp toàn bộ kịch bản Tập 1: Tuổi 30 Và Khoản Nợ Của Giấc Mơ Đổi Đời"/>
+                                        </Grid>
                                         <Grid Grid.Row="1" Margin="0,0,0,4">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -1217,7 +1226,7 @@
         <!-- BOTTOM WORKSTATION STATUS BAR -->
         <Border Grid.Row="2" Background="#0E1015" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0" Padding="14,0">
             <Grid>
-                <TextBlock Text="Clean Architecture: Domain -> Application -> Infrastructure -> Presentation  |  VoiceStudio + Podcast AI + Interactive NLE Timeline v4.0"
+                <TextBlock Text="Clean Architecture: Domain -> Application -> Infrastructure -> Presentation  |  VoiceStudio + Podcast AI + Interactive NLE Timeline v5.0"
                            FontSize="9.5" Foreground="#6B7280" VerticalAlignment="Center"/>
                 <TextBlock x:Name="TxtStatusRight" Text="No active project selected"
                            FontSize="9.5" FontFamily="Consolas" Foreground="#9CA3AF" HorizontalAlignment="Right" VerticalAlignment="Center"/>

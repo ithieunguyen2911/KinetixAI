@@ -1,4 +1,4 @@
-"""JsonProjectRepository - File-backed state store for VideoProjects (v3.0 Storyboard & NLE)."""
+"""JsonProjectRepository - Hot-reloading file-backed state store for VideoProjects (v5.0)."""
 
 import json
 from pathlib import Path
@@ -18,38 +18,78 @@ from src.domain.entities.video_project import VideoProject
 
 
 class JsonProjectRepository:
-    """Persists VideoProject state (including Context Bible, Characters, Scenes & Audit Logs)."""
+    """Persists VideoProject state with mtime-based hot reload and per-item fault isolation."""
 
     def __init__(self, storage_file: Path) -> None:
         self.storage_file = storage_file
         self.storage_file.parent.mkdir(parents=True, exist_ok=True)
         self._cache: Dict[str, VideoProject] = {}
+        self._last_mtime_ns: int = 0
         self._load()
+
+    def _reload_if_changed(self) -> None:
+        if not self.storage_file.exists():
+            if self._last_mtime_ns != 0:
+                self._cache = {}
+                self._last_mtime_ns = 0
+            return
+        try:
+            mtime_ns = self.storage_file.stat().st_mtime_ns
+        except OSError:
+            return
+        if mtime_ns != self._last_mtime_ns:
+            self._load()
 
     def _load(self) -> None:
         if not self.storage_file.exists():
+            self._cache = {}
+            self._last_mtime_ns = 0
             return
         try:
+            stat_before = self.storage_file.stat()
             raw_list = json.loads(self.storage_file.read_text(encoding="utf-8"))
-            for item in raw_list:
-                proj = self._from_dict(item)
-                self._cache[proj.project_id] = proj
         except Exception:
-            self._cache = {}
+            return
+
+        if not isinstance(raw_list, list):
+            return
+
+        fresh_cache: Dict[str, VideoProject] = {}
+        for item in raw_list:
+            if not isinstance(item, dict):
+                continue
+            try:
+                proj = self._from_dict(item)
+                fresh_cache[proj.project_id] = proj
+            except Exception:
+                continue
+
+        self._cache = fresh_cache
+        try:
+            self._last_mtime_ns = self.storage_file.stat().st_mtime_ns
+        except OSError:
+            self._last_mtime_ns = stat_before.st_mtime_ns
 
     def _save_to_disk(self) -> None:
         payload = [proj.to_dict() for proj in self._cache.values()]
         self.storage_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        try:
+            self._last_mtime_ns = self.storage_file.stat().st_mtime_ns
+        except OSError:
+            pass
 
     def save(self, project: VideoProject) -> VideoProject:
+        self._reload_if_changed()
         self._cache[project.project_id] = project
         self._save_to_disk()
         return project
 
     def get(self, project_id: str) -> VideoProject | None:
+        self._reload_if_changed()
         return self._cache.get(project_id)
 
     def delete(self, project_id: str) -> bool:
+        self._reload_if_changed()
         if project_id in self._cache:
             del self._cache[project_id]
             self._save_to_disk()
@@ -57,6 +97,7 @@ class JsonProjectRepository:
         return False
 
     def list_all(self) -> List[VideoProject]:
+        self._reload_if_changed()
         return list(self._cache.values())
 
     @staticmethod

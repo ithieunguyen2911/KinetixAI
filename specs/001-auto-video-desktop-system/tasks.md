@@ -1,8 +1,8 @@
 ---
-description: "Actionable, dependency-ordered task list for KinetixAI (FlowVids-AI) v2.0 Professional NLE Video Editor & Polyglot Studio"
+description: "Actionable, dependency-ordered task list for KinetixAI (FlowVids-AI) v5.0 Professional NLE Video Editor, VoiceStudio & Broadcast Podcast Studio"
 ---
 
-# Tasks: KinetixAI (FlowVids-AI) v2.0 — Professional Non-Linear Video Editor (NLE) & Polyglot Studio
+# Tasks: KinetixAI (FlowVids-AI) v5.0 — End-to-End Verified NLE Workstation, VoiceStudio & Broadcast Podcast Studio
 
 **Input**: Design documents from `/specs/001-auto-video-desktop-system/` (`plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/api-and-render-contracts.md`, `quickstart.md`)
 
@@ -158,3 +158,24 @@ description: "Actionable, dependency-ordered task list for KinetixAI (FlowVids-A
 - [X] T066 Generate & validate Enterprise User Guide (`Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.{docx,html,md}`) in `docs/` using `product-user-guide-generator` CLI
 - [X] T067 Add unit & integration tests for Timeline Clip CRUD, Voice Design, Consent-Gated Voice Cloning, Expressive Tags, Podcast Generation & Auto Dubbing in `tests/`
 - [X] T068 Verify `uv run pytest -v` (100% pass), `dotnet build` (`0 Warning(s), 0 Error(s)`), launch via `.\run_desktop.ps1`, mark all tasks `[X]`, and push v4.0 to GitHub
+
+---
+
+## Phase 18: User Story 11 — Deep Audit Remediation, Broadcast Podcast Video Engine & Full-Length Episode 1 Production (`v5.0`)
+
+**Goal**: Remediate all 6 root-cause findings from `/speckit-analyze` (`analysis-v5.md`) so every Studio feature operates with real media output, resilient Desktop startup, and produce the complete full-length demo podcast video **`TẬP 1: TUỔI 30 VÀ KHOẢN NỢ CỦA GIẤC MƠ ĐỔI ĐỜI`**.
+
+**Independent Test**: Run `uv run pytest -v`, build WPF Desktop (`0 Error(s)`), generate `tap_01_tuoi_30_podcast` from the exact user script, verify via `ffprobe` (`duration >= 180s`, `1280x720@30fps` H.264 + AAC) and visual PNG snapshots at Hook/Analysis/Turnaround, and confirm `KinetixAI.Desktop` launches with `PROJECTS BIN` populated.
+
+- [X] T069 [P] [US11] Implement pure Domain `PodcastScriptParser` (`ParsedPodcastScript`, `PodcastChapterSpec`, `PodcastSfxCue`) in `src/domain/services/podcast_script_parser.py` to strip timestamps/stage cues/recording notes from TTS text, extract chapters, map SFX/BGM cues, chunk long paragraphs into 12–24 word caption turns, and inject psychological Hook pauses (`"30 tuổi"`, `"tắt ngấm"`, `"con số âm"`)
+- [X] T070 [P] [US11] Upgrade `TtsVoiceAdapter` in `src/infrastructure/tts/tts_voice_adapter.py` with 45s `edge-tts` timeout + retry resilience, concurrent multi-turn synthesis (`ThreadPoolExecutor`), warm late-night baritone EQ shaping (`vi-VN-NamMinhNeural`), and mid-sentence `[pause Nms]` silence splicing
+- [X] T071 [P] [US11] Upgrade `StudioAudioLibraryAdapter` in `src/infrastructure/audio/audio_library_adapter.py` with multi-chord struck piano/acoustic BGM presets (`bgm_piano_melancholic`, `bgm_inspiring_acoustic`) and diegetic Hook SFX presets (`sfx_fan_shutdown`, `sfx_phone_vibrate`)
+- [X] T072 [P] [US11] Declare `render_podcast_video` on `IVideoProcessor` in `src/domain/interfaces/video_processor.py` and implement UTF-8 multi-line auto-wrapped `.ass` subtitle generation + `render_podcast_video` (2-stage mood canvas, Episode/Chapter HUD, progress bar, live `showwaves` voice waveform, diegetic SFX injection, and 2-stage crossfaded BGM ducking) in `src/infrastructure/processors/ffmpeg_adapter.py`
+- [X] T073 [P] [US11] Upgrade `render_engines/remotion_engine/render.mjs` and `render_engines/hyperframes_engine/render.mjs` with automatic multi-line Vietnamese word-wrapping so standard pipeline overlays never clip horizontally
+- [X] T074 [US11] Upgrade `ProjectService.generate_project_podcast` (and Context/Character visual sync) in `src/application/services/project_service.py` to orchestrate `PodcastScriptParser`, `TtsVoiceAdapter`, `StudioAudioLibraryAdapter`, and `IVideoProcessor.render_podcast_video`
+- [X] T075 [P] [US11] Harden `JsonProjectRepository._load` with per-item fault isolation in `src/infrastructure/repositories/json_project_repository.py`
+- [X] T076 [P] [US11] Upgrade `desktop_app/KinetixAI.Desktop` (`MainWindow.xaml`, `MainWindow.xaml.cs`) and `run_desktop.ps1` to launch `.venv\Scripts\python.exe -m uvicorn` directly, pre-check `/api/v1/health`, expose new piano/acoustic BGM + diegetic SFX presets, and provide 1-click loading of Episode 1 script in Tab 5
+- [X] T077 [US11] Produce the full-length real podcast video `tap_01_tuoi_30_podcast` (`TẬP 1: TUỔI 30 VÀ KHOẢN NỢ CỦA GIẤC MƠ ĐỔI ĐỜI`) and verify `ffprobe` metrics, audio loudness (`astats`/`ebur128`), and 3 PNG snapshots (`Hook`, `Phân tích`, `Bước ngoặt`)
+- [X] T078 [US11] Write comprehensive unit & integration tests for `PodcastScriptParser`, Hook pause splicing, new BGM/SFX presets, `.ass` wrapped subtitles, `render_podcast_video`, and `JsonProjectRepository` fault isolation in `tests/unit/test_podcast_studio_v5.py`
+- [X] T079 [US11] Run full `uv run pytest -v` (100% pass), `dotnet build` (`0 Warning(s), 0 Error(s)`), launch `.\run_desktop.ps1`, and verify `http://127.0.0.1:8000/api/v1/projects` + `KinetixAI.Desktop` live state
+- [X] T080 [US11] Mark all Phase 18 tasks `[X]` in `specs/001-auto-video-desktop-system/tasks.md`, commit, and push v5.0 to `origin/main` on GitHub

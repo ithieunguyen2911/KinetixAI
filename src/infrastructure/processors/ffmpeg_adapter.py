@@ -869,6 +869,485 @@ class FfmpegAdapter(IVideoProcessor):
         return final_file
 
     @staticmethod
+    def _escape_drawtext(text: str) -> str:
+        """Escape special characters for FFmpeg drawtext filter strings while preserving UTF-8 Vietnamese glyphs."""
+        return (
+            str(text or "")
+            .replace("\\", "\\\\")
+            .replace("'", "’")
+            .replace(":", "\\:")
+            .replace("%", "\\%")
+            .replace(",", "\\,")
+            .replace(";", "\\;")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+        )
+
+    @staticmethod
+    def _escape_filter_path(file_path: Path) -> str:
+        """Format a Windows/POSIX path for single-quoted FFmpeg filter options such as ass='...'."""
+        return (
+            str(file_path.resolve())
+            .replace("\\", "/")
+            .replace(":", "\\:")
+            .replace("'", "\\'")
+        )
+
+    @staticmethod
+    def wrap_subtitle_text(text: str, max_chars: int = 50, sep: str = "\\N") -> str:
+        """Word-wrap UTF-8 Vietnamese/English text into lines of at most max_chars without splitting words mid-syllable."""
+        cleaned = " ".join(str(text or "").strip().split())
+        if not cleaned:
+            return ""
+        limit = max(12, int(max_chars))
+        if len(cleaned) <= limit:
+            return cleaned
+
+        words = cleaned.split(" ")
+
+        def _greedy_wrap(line_limit: int) -> List[str]:
+            out: List[str] = []
+            current = ""
+            for word in words:
+                if not current:
+                    current = word
+                elif len(current) + 1 + len(word) <= line_limit:
+                    current = f"{current} {word}"
+                else:
+                    out.append(current)
+                    current = word
+            if current:
+                out.append(current)
+            return out
+
+        lines = _greedy_wrap(limit)
+        # Balance 2-line captions when the trailing line has a short orphan word
+        if len(lines) == 2 and len(lines[1]) < 14 and len(cleaned) <= limit * 2:
+            balanced_target = min(limit, max(22, (len(cleaned) // 2) + 5))
+            balanced = _greedy_wrap(balanced_target)
+            if len(balanced) == 2 and all(len(ln) <= limit for ln in balanced):
+                lines = balanced
+
+        return sep.join(lines)
+
+    @classmethod
+    def _write_ass(
+        cls,
+        subtitles: List[SubtitleSegment],
+        ass_path: Path,
+        width: int = 1280,
+        height: int = 720,
+    ) -> Path:
+        """Write a broadcast-styled UTF-8 Advanced SubStation Alpha (.ass) subtitle file with word-wrapped lines."""
+        ass_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def fmt_ass_time(seconds: float) -> str:
+            total_cs = max(0, int(round(float(seconds) * 100)))
+            hrs = total_cs // 360000
+            mins = (total_cs % 360000) // 6000
+            secs = (total_cs % 6000) // 100
+            cs = total_cs % 100
+            return f"{hrs}:{mins:02d}:{secs:02d}.{cs:02d}"
+
+        max_chars = max(24, int(round(50 * (width / 1280.0))))
+        lines: List[str] = [
+            "[Script Info]",
+            "Title: KinetixAI Broadcast Subtitles",
+            "ScriptType: v4.00+",
+            f"PlayResX: {int(width)}",
+            f"PlayResY: {int(height)}",
+            "WrapStyle: 0",
+            "ScaledBorderAndShadow: yes",
+            "YCbCr Matrix: TV.709",
+            "",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
+            "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+            # BorderStyle=1 over lower-third scrim prevents multi-line box overlap while keeping crisp contrast
+            "Style: Default,Segoe UI,28,&H00FBFAF9,&H00F8BD38,&H00180D06,&HAA120804,"
+            "-1,0,0,0,100,100,0,0,1,2.8,1.8,2,90,90,50,1",
+            "",
+            "[Events]",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+        ]
+
+        for seg in subtitles:
+            raw_text = str(seg.text or "").replace("{", "(").replace("}", ")").strip()
+            if not raw_text:
+                continue
+            wrapped = cls.wrap_subtitle_text(raw_text, max_chars=max_chars, sep="\\N")
+            line_count = wrapped.count("\\N") + 1
+            prefix = "{\\fs24}" if line_count >= 3 else ""
+            start_ts = fmt_ass_time(seg.start_time)
+            end_ts = fmt_ass_time(max(seg.start_time + 0.15, seg.end_time))
+            lines.append(f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{prefix}{wrapped}")
+
+        ass_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return ass_path
+
+    def render_podcast_video(
+        self,
+        voice_audio_path: Path,
+        output_path: Path,
+        subtitles: List[SubtitleSegment],
+        episode_title: str = "KINETIX PODCAST STUDIO",
+        speaker_label: str = "HOST • NAM MINH",
+        chapters: List[Dict[str, Any]] | None = None,
+        bgm_primary_path: Path | None = None,
+        bgm_secondary_path: Path | None = None,
+        bgm_transition_sec: float | None = None,
+        bgm_volume: float = 0.14,
+        sfx_events: List[Dict[str, Any]] | None = None,
+    ) -> Path:
+        """Render a broadcast-grade 1280x720@30fps Podcast MP4 with live voice waveform, Chapter HUD, wrapped .ass captions, SFX, and 2-stage BGM."""
+        if not voice_audio_path.exists():
+            raise FileNotFoundError(f"Podcast voice audio file not found: {voice_audio_path}")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_video = output_path.with_name(f".staging_pod_{output_path.name}")
+        staging_master_audio = output_path.with_name(f".staging_pod_master_{output_path.stem}.wav")
+        staging_ass = output_path.with_name(f".staging_pod_subs_{output_path.stem}.ass")
+
+        voice_probe = self.probe_media(voice_audio_path)
+        voice_dur = max(2.0, float(voice_probe.get("duration_seconds") or 2.0))
+        max_sub_end = max((float(s.end_time) for s in subtitles), default=0.0)
+        total_dur = round(max(voice_dur, max_sub_end), 2)
+
+        safe_bgm_vol = max(0.0, min(1.0, float(bgm_volume)))
+        has_primary = bgm_primary_path is not None and Path(bgm_primary_path).exists()
+        has_secondary = bgm_secondary_path is not None and Path(bgm_secondary_path).exists()
+        has_two_stage_bgm = (
+            has_primary
+            and has_secondary
+            and bgm_transition_sec is not None
+            and (1.0 < float(bgm_transition_sec) < total_dur - 1.0)
+        )
+
+        try:
+            # =========================================================================
+            # STEP A: Master Podcast Audio (Upfront Voice + Timed SFX + 1/2-Stage BGM)
+            # =========================================================================
+            audio_cmd: List[str] = ["ffmpeg", "-y", "-i", str(voice_audio_path)]
+            audio_filters: List[str] = [
+                f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                f"volume=1.18,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[voice]"
+            ]
+            mix_labels: List[str] = ["[voice]"]
+            next_idx = 1
+
+            for sfx_i, ev in enumerate(sfx_events or []):
+                raw_sfx_path = ev.get("path")
+                if not raw_sfx_path:
+                    continue
+                sfx_file = Path(raw_sfx_path)
+                ts_sec = float(ev.get("timestamp_sec", 0.0) or 0.0)
+                if not sfx_file.exists() or ts_sec < 0.0 or ts_sec >= total_dur:
+                    continue
+                sfx_vol = max(0.0, min(2.0, float(ev.get("volume", 0.55) or 0.55)))
+                delay_ms = max(0, int(round(ts_sec * 1000)))
+                audio_cmd.extend(["-i", str(sfx_file)])
+                lbl = f"sfx{sfx_i}"
+                audio_filters.append(
+                    f"[{next_idx}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"volume={sfx_vol:.3f},adelay={delay_ms}|{delay_ms},"
+                    f"apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[{lbl}]"
+                )
+                mix_labels.append(f"[{lbl}]")
+                next_idx += 1
+
+            end_fade_d = min(1.8, max(0.25, total_dur * 0.25))
+            end_fade_st = max(0.1, total_dur - end_fade_d)
+
+            if has_two_stage_bgm and bgm_primary_path is not None and bgm_secondary_path is not None:
+                tr_sec = float(bgm_transition_sec or 0.0)
+                bgm1_end = min(total_dur, tr_sec + 1.25)
+                f1_d = min(2.5, max(0.3, bgm1_end - 0.2))
+                f1_st = max(0.1, bgm1_end - f1_d)
+
+                bgm2_start = max(0.0, tr_sec - 1.5)
+                bgm2_len = max(0.5, total_dur - bgm2_start)
+                bgm2_ms = max(0, int(round(bgm2_start * 1000)))
+                f2_in_d = min(2.5, max(0.3, bgm2_len * 0.6))
+
+                audio_cmd.extend(["-stream_loop", "-1", "-i", str(bgm_primary_path)])
+                idx_b1 = next_idx
+                next_idx += 1
+
+                audio_cmd.extend(["-stream_loop", "-1", "-i", str(bgm_secondary_path)])
+                idx_b2 = next_idx
+                next_idx += 1
+
+                audio_filters.append(
+                    f"[{idx_b1}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"atrim=0:{bgm1_end:.2f},asetpts=PTS-STARTPTS,"
+                    f"afade=t=in:st=0:d=0.80,afade=t=out:st={f1_st:.2f}:d={f1_d:.2f},"
+                    f"volume={safe_bgm_vol:.3f},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[bgm1]"
+                )
+                audio_filters.append(
+                    f"[{idx_b2}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"atrim=0:{bgm2_len:.2f},asetpts=PTS-STARTPTS,"
+                    f"afade=t=in:st=0:d={f2_in_d:.2f},volume={safe_bgm_vol:.3f},"
+                    f"adelay={bgm2_ms}|{bgm2_ms},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
+                    f"afade=t=out:st={end_fade_st:.2f}:d={end_fade_d:.2f},asetpts=PTS-STARTPTS[bgm2]"
+                )
+                mix_labels.extend(["[bgm1]", "[bgm2]"])
+            elif has_primary or has_secondary:
+                single_bgm = bgm_primary_path if has_primary else bgm_secondary_path
+                audio_cmd.extend(["-stream_loop", "-1", "-i", str(single_bgm)])
+                idx_b = next_idx
+                next_idx += 1
+                audio_filters.append(
+                    f"[{idx_b}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS,"
+                    f"afade=t=in:st=0:d=0.80,afade=t=out:st={end_fade_st:.2f}:d={end_fade_d:.2f},"
+                    f"volume={safe_bgm_vol:.3f}[bgm1]"
+                )
+                mix_labels.append("[bgm1]")
+
+            if len(mix_labels) == 1:
+                audio_filters.append("[voice]alimiter=limit=0.96[aout]")
+            else:
+                # normalize=0 prevents FFmpeg amix from dividing voice loudness by N inputs!
+                audio_filters.append(
+                    f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:"
+                    f"dropout_transition=0:normalize=0,alimiter=limit=0.96[aout]"
+                )
+
+            audio_cmd.extend(
+                [
+                    "-filter_complex",
+                    ";".join(audio_filters),
+                    "-map",
+                    "[aout]",
+                    "-acodec",
+                    "pcm_s16le",
+                    "-ar",
+                    "24000",
+                    "-ac",
+                    "2",
+                    "-t",
+                    f"{total_dur:.2f}",
+                    str(staging_master_audio),
+                ]
+            )
+            res_audio = subprocess.run(audio_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res_audio.returncode != 0 or not staging_master_audio.exists():
+                # Resilient fallback preserving clean upfront voice track
+                fallback_audio_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(voice_audio_path),
+                    "-af",
+                    f"aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"volume=1.18,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f}",
+                    "-acodec",
+                    "pcm_s16le",
+                    "-ar",
+                    "24000",
+                    "-ac",
+                    "2",
+                    str(staging_master_audio),
+                ]
+                subprocess.run(fallback_audio_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # =========================================================================
+            # STEP B: Broadcast 1280x720@30fps Visuals + Waveform + HUD + Wrapped .ass
+            # =========================================================================
+            self._write_ass(subtitles, staging_ass, width=1280, height=720)
+
+            font_reg_file = Path("C:/Windows/Fonts/segoeui.ttf")
+            font_bold_file = Path("C:/Windows/Fonts/segoeuib.ttf")
+            font_reg = "fontfile='C\\:/Windows/Fonts/segoeui.ttf':" if font_reg_file.exists() else ""
+            font_bold = (
+                "fontfile='C\\:/Windows/Fonts/segoeuib.ttf':"
+                if font_bold_file.exists()
+                else font_reg
+            )
+
+            clean_title = " ".join(str(episode_title or "KINETIX PODCAST STUDIO").strip().split())
+            if len(clean_title) > 48:
+                clean_title = f"{clean_title[:46].rstrip()}…"
+            clean_speaker = " ".join(str(speaker_label or "HOST • NAM MINH").strip().split())
+            if len(clean_speaker) > 28:
+                clean_speaker = f"{clean_speaker[:26].rstrip()}…"
+
+            safe_title = self._escape_drawtext(clean_title)
+            safe_speaker = self._escape_drawtext(clean_speaker)
+
+            has_turnaround_hud = bgm_transition_sec is not None and (0.2 < float(bgm_transition_sec) < total_dur)
+            tr_val = float(bgm_transition_sec or 0.0)
+            tr_enable = f":enable='gte(t\\,{tr_val:.2f})'"
+
+            hud_ops: List[str] = [
+                # Atmospheric studio backdrop + Stage 1 cool midnight-blue accents
+                "drawbox=x=0:y=0:w=1280:h=4:color=0x38BDF8@0.90:t=fill",
+                "drawbox=x=42:y=16:w=1196:h=684:color=0x111827@0.38:t=fill",
+                "drawbox=x=84:y=179:w=1112:h=342:color=0x38BDF8@0.07:t=fill",
+            ]
+
+            if has_turnaround_hud:
+                # Stage 2 warm hopeful amber/emerald glow at emotional turnaround
+                hud_ops.extend(
+                    [
+                        f"drawbox=x=0:y=0:w=1280:h=5:color=0xF59E0B@0.96:t=fill{tr_enable}",
+                        f"drawbox=x=84:y=179:w=1112:h=342:color=0xF59E0B@0.14:t=fill{tr_enable}",
+                    ]
+                )
+
+            # 3. Top Episode Header Bar (x=56, y=28, w=1168, h=54)
+            hud_ops.extend(
+                [
+                    "drawbox=x=56:y=28:w=1168:h=54:color=0x111827@0.95:t=fill",
+                    "drawbox=x=56:y=28:w=1168:h=54:color=0x1E293B@0.95:t=1",
+                    "drawbox=x=56:y=28:w=5:h=54:color=0x38BDF8@1.0:t=fill",
+                    "drawbox=x=74:y=38:w=164:h=34:color=0x1E293B@0.96:t=fill",
+                    f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0x38BDF8:fontsize=14:x=90:y=48",
+                    f"drawtext={font_bold}text='{safe_title}':fontcolor=0xF9FAFB:fontsize=20:x=254:y=44",
+                    "drawbox=x=924:y=36:w=286:h=38:color=0x0F172A@0.95:t=fill",
+                    "drawbox=x=1206:y=36:w=4:h=38:color=0x38BDF8@1.0:t=fill",
+                    f"drawtext={font_bold}text='{safe_speaker}':fontcolor=0x93C5FD:fontsize=15:x=1194-text_w:y=47",
+                ]
+            )
+            if has_turnaround_hud:
+                hud_ops.extend(
+                    [
+                        f"drawbox=x=56:y=28:w=5:h=54:color=0xF59E0B@1.0:t=fill{tr_enable}",
+                        f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0xFCD34D:fontsize=14:x=90:y=48{tr_enable}",
+                        f"drawbox=x=1206:y=36:w=4:h=38:color=0x10B981@1.0:t=fill{tr_enable}",
+                    ]
+                )
+
+            # 4. Dynamic Chapter HUD Card (x=56, y=96, w=1168, h=52)
+            hud_ops.extend(
+                [
+                    "drawbox=x=56:y=96:w=1168:h=52:color=0x0E1628@0.92:t=fill",
+                    "drawbox=x=56:y=96:w=1168:h=52:color=0x1E293B@0.90:t=1",
+                    "drawbox=x=56:y=96:w=4:h=52:color=0x38BDF8@0.95:t=fill",
+                ]
+            )
+            if has_turnaround_hud:
+                hud_ops.append(f"drawbox=x=56:y=96:w=4:h=52:color=0x10B981@0.95:t=fill{tr_enable}")
+
+            effective_chapters = list(chapters) if chapters else [
+                {"title": clean_title, "start_time": 0.0, "end_time": total_dur, "mood": "STUDIO LIVE"}
+            ]
+            for idx, ch in enumerate(effective_chapters, start=1):
+                ch_raw = " ".join(str(ch.get("title") or f"Phần {idx}").strip().split())
+                if len(ch_raw) > 62:
+                    ch_raw = f"{ch_raw[:60].rstrip()}…"
+                c_start = max(0.0, float(ch.get("start_time", 0.0) or 0.0))
+                c_end = max(c_start + 0.1, float(ch.get("end_time", total_dur) or total_dur))
+                if idx == len(effective_chapters):
+                    c_end = max(c_end, total_dur + 0.25)
+                ch_label = self._escape_drawtext(f"CHƯƠNG {idx:02d}  •  {ch_raw}")
+                hud_ops.append(
+                    f"drawtext={font_bold}text='{ch_label}':fontcolor=0xE2E8F0:fontsize=18:"
+                    f"x=78:y=112:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+                )
+                mood_raw = " ".join(str(ch.get("mood") or "").strip().split()).upper()
+                if mood_raw:
+                    safe_mood = self._escape_drawtext(mood_raw[:24])
+                    hud_ops.append(
+                        f"drawtext={font_reg}text='{safe_mood}':fontcolor=0x38BDF8:fontsize=14:"
+                        f"x=1204-text_w:y=115:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+                    )
+
+            # 5. Center Reactive Audio Waveform Visualizer Frame (x=90, y=185, w=1100, h=330)
+            hud_ops.extend(
+                [
+                    "drawbox=x=90:y=185:w=1100:h=330:color=0x0E1422@0.94:t=fill",
+                    "drawbox=x=90:y=185:w=1100:h=330:color=0x1E293B@0.95:t=2",
+                    "drawbox=x=90:y=185:w=1100:h=3:color=0x38BDF8@0.92:t=fill",
+                    "drawbox=x=130:y=350:w=1020:h=1:color=0x334155@0.55:t=fill",
+                    f"drawtext={font_reg}text='LIVE VOICE WAVEFORM  •  24kHz BROADCAST MASTER':fontcolor=0x64748B:fontsize=13:x=118:y=204",
+                ]
+            )
+            if has_turnaround_hud:
+                hud_ops.append(f"drawbox=x=90:y=185:w=1100:h=3:color=0xF59E0B@0.96:t=fill{tr_enable}")
+
+            # 6. Lower-Third Subtitle Scrim (x=64, y=542, w=1152, h=144) + Bottom Progress Track
+            hud_ops.extend(
+                [
+                    "drawbox=x=64:y=542:w=1152:h=144:color=0x0B0F19@0.90:t=fill",
+                    "drawbox=x=64:y=542:w=1152:h=144:color=0x1E293B@0.92:t=1",
+                    "drawbox=x=64:y=542:w=1152:h=3:color=0x38BDF8@0.88:t=fill",
+                    "drawbox=x=0:y=712:w=1280:h=8:color=0x1E293B@0.92:t=fill",
+                ]
+            )
+            if has_turnaround_hud:
+                hud_ops.append(f"drawbox=x=64:y=542:w=1152:h=3:color=0x10B981@0.95:t=fill{tr_enable}")
+
+            esc_ass = self._escape_filter_path(staging_ass)
+            sub_stage = f"[vp]ass='{esc_ass}'[vout]" if subtitles else "[vp]null[vout]"
+
+            video_fc = (
+                f"color=c=0x090D16:s=1280x720:r=30:d={total_dur:.2f}[bg0];"
+                f"color=c=0x38BDF8:s=1280x8:r=30:d={total_dur:.2f}[pbar];"
+                f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                f"volume=2.2,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
+                f"showwaves=s=1020x210:mode=cline:draw=full:rate=30:scale=sqrt:"
+                f"colors=0x38BDF8@0.92|0x60A5FA@0.75,format=rgb24,colorkey=0x000000:0.03:0.05[wave];"
+                f"[bg0]{','.join(hud_ops)}[hud];"
+                f"[hud][wave]overlay=x=130:y=245:shortest=1[vwave];"
+                f"[vwave][pbar]overlay=x='-1280+1280*(t/{total_dur:.2f})':y=712:shortest=1[vp];"
+                f"{sub_stage}"
+            )
+
+            video_cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(voice_audio_path),
+                "-i",
+                str(staging_master_audio),
+                "-filter_complex",
+                video_fc,
+                "-map",
+                "[vout]",
+                "-map",
+                "1:a:0",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "ultrafast",
+                "-r",
+                "30",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-ar",
+                "44100",
+                "-t",
+                f"{total_dur:.2f}",
+                "-movflags",
+                "+faststart",
+                str(staging_video),
+            ]
+            res_vid = subprocess.run(video_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res_vid.returncode != 0:
+                raise RuntimeError(
+                    f"FFmpeg podcast video render failed (code {res_vid.returncode}): {res_vid.stderr[-600:]}"
+                )
+
+            final_file = self._safe_finalize_output(staging_video, output_path)
+            self._write_ass(subtitles, final_file.with_suffix(".ass"), width=1280, height=720)
+            self._write_srt(subtitles, final_file.with_suffix(".srt"))
+            self._write_vtt(subtitles, final_file.with_suffix(".vtt"))
+            return final_file
+        finally:
+            for temp_f in (staging_master_audio, staging_ass):
+                if temp_f.exists():
+                    try:
+                        temp_f.unlink()
+                    except OSError:
+                        pass
+
+    @staticmethod
     def _write_srt(subtitles: List[SubtitleSegment], srt_path: Path) -> None:
         """Write standard SubRip (.srt) subtitle file."""
         def fmt_time(seconds: float) -> str:
