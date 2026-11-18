@@ -1871,6 +1871,95 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BtnFullScreen_Click(object sender, RoutedEventArgs e)
+    {
+        OpenFullScreenPlayer();
+    }
+
+    private void BorderVideoMonitor_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            OpenFullScreenPlayer();
+        }
+    }
+
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F11 || (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.None && !IsTextInputFocused()))
+        {
+            OpenFullScreenPlayer();
+            e.Handled = true;
+        }
+    }
+
+    private bool IsTextInputFocused()
+    {
+        return FocusManager.GetFocusedElement(this) is TextBox;
+    }
+
+    private void OpenFullScreenPlayer()
+    {
+        string? candidatePath = null;
+        if (VideoPlayer.Source != null && VideoPlayer.Source.IsFile && File.Exists(VideoPlayer.Source.LocalPath))
+        {
+            candidatePath = VideoPlayer.Source.LocalPath;
+        }
+        else if (_currentProject?.FinalOutputPath is string fp && File.Exists(fp))
+        {
+            candidatePath = fp;
+        }
+        else if (_currentProject?.RawVideoPath is string rp && File.Exists(rp))
+        {
+            candidatePath = rp;
+        }
+
+        if (string.IsNullOrWhiteSpace(candidatePath) || !File.Exists(candidatePath))
+        {
+            MessageBox.Show(
+                "Chưa có file video nào được tải trong Program Monitor. Vui lòng chọn một dự án có video hoặc xuất bản video trước khi xem toàn màn hình.",
+                "Chưa có Video",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var currentPos = VideoPlayer.Position;
+        bool wasPlaying = _isPlaying;
+
+        if (_isPlaying)
+        {
+            VideoPlayer.Pause();
+            _isPlaying = false;
+            BtnPlayPause.Content = "Play";
+        }
+
+        var title = _currentProject?.ProjectId ?? "Kinetix Studio Video";
+        var fsWin = new FullScreenPlayerWindow(
+            candidatePath,
+            currentPos,
+            wasPlaying,
+            VideoPlayer.Volume > 0 ? VideoPlayer.Volume : 1.0,
+            title)
+        {
+            Owner = this
+        };
+
+        fsWin.ShowDialog();
+
+        // Restore playhead position and playback state from FullScreen window
+        var exitPos = fsWin.ExitPosition;
+        SeekMonitorTo(exitPos.TotalSeconds);
+
+        if (fsWin.WasPlaying)
+        {
+            VideoPlayer.Play();
+            _isPlaying = true;
+            BtnPlayPause.Content = "Pause";
+            _playheadTimer.Start();
+        }
+    }
+
     private void BtnOpenFolder_Click(object sender, RoutedEventArgs e)
     {
         if (_currentProject?.FinalOutputPath is string path && File.Exists(path))

@@ -31,3 +31,28 @@ Rather than inventing ad-hoc patterns, KinetixAI v3.0 synthesizes proven design 
   3. **Expressive Speech Tags & Multi-Genre Podcast/Storytelling**: Supports `[pause]`, `[pause 500ms]`, `[breath]`, `[laughter]`, `[sigh]`, `[emotion:warm|excited|whisper|dramatic|mysterious|calm|late_night]` across 6 genres (`StorytellingGenre`).
   4. **Time-Aligned Video Dubbing**: Synthesizes translated segments stitched cleanly onto video timeline duration (`replace_audio_track` with automatic `tpad` video extension if narration exceeds base video).
   5. **Interactive Multi-Track Timeline CRUD**: Clickable `TimelineClip` entities across `V2`, `V1`, `S1`, `A1`, `B1` supporting inline **Add, Edit, Split at Playhead, Clone, Delete, and Ripple MP4 Render** directly inside WPF.
+
+## 4. Research & Architectural Decision: Cinema FullScreen Player for WPF NLE Desktop (US14)
+
+### 4.1 Evaluation of Fullscreen Approaches in WPF
+- **Option 1: In-place Grid Maximization inside MainWindow**:
+  - Toggling visibility of Left Dock (Column 0), Right Inspector (Column 4), Center Timeline (Row 2), and Tabs (Row 4).
+  - *Drawbacks*: Prone to layout jitter, tricky grid splitter position restoration, fails to hide the Windows OS taskbar and title bar, leaving visual clutter.
+- **Option 2: Dedicated Borderless Cinema Window (`FullScreenPlayerWindow.xaml`) (CHOSEN)**:
+  - Configured with `WindowStyle="None"`, `WindowState="Maximized"`, `Topmost="True"`, `Background="#000000"`, `ShowInTaskbar="False"`, and `AllowsTransparency="False"` (for optimal Direct3D hardware video acceleration).
+  - *Advantages*: Pure distraction-free cinema canvas, true 100% monitor resolution, completely immune to docking layout bugs, seamless keyboard event capture (`F11`, `F`, `Space`, `Esc`, arrow keys), and clean lifetime lifecycle.
+
+### 4.2 Auto-Hiding Glass HUD Engine
+- Uses a `DispatcherTimer` running on the UI thread with a `2.5-second` inactivity threshold.
+- `MouseMove` event handlers on the root canvas reset the idle timer and restore HUD opacity to `1.0` with a smooth `0.2s` `DoubleAnimation`.
+- When the timer fires without mouse interaction, the HUD smoothly fades to `Opacity = 0.0` with a `0.5s` `DoubleAnimation`, giving the user an unobstructed 100% view of subtitles, artwork, Ken Burns motion, and typography.
+- Mouse movement immediately wakes the HUD and displays timecode, playback status, volume slider, and navigation controls.
+
+### 4.3 Bidirectional State Synchronization
+- **Entry Phase**: When the user clicks **"Toàn Màn Hình" (⛶)**, double-clicks the Program Monitor, or hits `F11`/`F`, `MainWindow` captures:
+  1. Active video file URI (`VideoPlayer.Source`),
+  2. Current playhead position (`VideoPlayer.Position`),
+  3. Playback state (`_isPlaying`),
+  4. Master volume (`_currentVolume`).
+  The MainWindow pauses its player and instantiates `FullScreenPlayerWindow`.
+- **Exit Phase**: Upon pressing `Esc`, `F11`, or clicking the close button, `FullScreenPlayerWindow` halts playback, passes its `CurrentPosition` and `IsPlaying` back to `MainWindow`, and `MainWindow` restores its `VideoPlayer` and timeline slider without dropping a single millisecond of progress.

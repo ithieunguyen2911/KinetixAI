@@ -68,3 +68,26 @@ Adds `animation_preset`, `transition_preset`, `voice_id`, `bgm_preset`, `beat_ti
 - **`TimelineClip`**: `{clip_id, track_id ("V2"|"V1"|"S1"|"A1"|"B1"), label, start_time, end_time, source_start, source_end, speed, volume, transition_in}`.
 - **`VoiceProfile`**: `{profile_id, name, mode ("builtin"|"designed"|"cloned"), base_voice_id, prompt_description, seed, pitch_hz, rate, warmth_eq, emotion_style, reference_audio_path, consent_verified}`.
 - **`PodcastTurn`**: `{turn_id, speaker_name, voice_id, emotion, text, pause_after_ms}`.
+
+---
+
+## 4. v6.1 FullScreen Cinema Preview Models (US14)
+
+### `FullScreenPlaybackState` (Desktop WPF Runtime Model)
+| Field | Type | Description |
+|-------|------|-------------|
+| `SourceUri` | `Uri` | Absolute path/URI to the media file being previewed |
+| `CurrentPosition` | `TimeSpan` | Playhead position transferred from/to `MainWindow` |
+| `TotalDuration` | `TimeSpan` | Natural duration of the media stream |
+| `IsPlaying` | `bool` | Running or paused status |
+| `Volume` | `double` | Master audio volume [0.0 .. 1.0] |
+| `IsMuted` | `bool` | Mute toggle state |
+| `ResolutionLabel` | `string` | e.g. `"1280x720 • 30.0 fps"` |
+| `EpisodeTitle` | `string` | Display label in upper corner of HUD |
+
+### `CinemaHudVisibilityState` (Auto-Hide Glass Control State)
+| Field | Type | Description |
+|-------|------|-------------|
+| `IsVisible` | `bool` | True when HUD is shown; false when faded out |
+| `IdleTimeout` | `TimeSpan` | 2.5 seconds inactivity before triggering fade animation |
+| `HudOpacity` | `double` | 1.0 when active, smoothly animated to 0.0 when idle |

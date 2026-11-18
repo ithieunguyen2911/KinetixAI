@@ -198,3 +198,14 @@ description: "Actionable, dependency-ordered task list for KinetixAI (FlowVids-A
 - [X] T090 [US13] Upgrade `ProjectService.generate_project_podcast` in `src/application/services/project_service.py` to orchestrate paragraph-flow TTS, `StoryboardVisualAdapter` B-Roll resolution, and Ken Burns + Sidechain `render_podcast_video`
 - [X] T091 [US12] Write unit & integration tests in `tests/unit/test_soulful_podcast_v6.py` covering paragraph-beat parsing, unbroken `SentenceBoundary` subtitle alignment, `VieNeu`/provider registry, `StoryboardVisualAdapter`, Ken Burns B-Roll rendering, and sidechain audio ducking; verify `uv run pytest -v` (100% pass) and `dotnet build` (`0 Error(s)`)
 - [X] T092 [US13] Regenerate full-length **Episode 1 (`tap_01_tuoi_30_podcast`)** in v6.0, verify multi-scene Ken Burns illustrations + audio prosody/ducking via `ffprobe` & extracted PNG snapshots, launch `.\run_desktop.ps1`, mark all tasks `[X]`, and push v6.0 to GitHub
+
+---
+
+## Phase 20: User Story 14 — Integrated Cinema Full-Screen Video Preview & Transport Controls (`v6.1`)
+
+**Goal**: Implement an immersive, broadcast-quality **Cinema FullScreen Player** directly in the WPF Desktop NLE (`desktop_app/KinetixAI.Desktop`), allowing the user to view the exported 1080p/4K video at 100% monitor resolution with an auto-hiding glass HUD, full keyboard transport controls (`F11`, `Space`, `Esc`, `←`, `→`), and bidirectional playhead synchronization.
+
+- [X] T093 [P] [US14] Create `FullScreenPlayerWindow.xaml` and `FullScreenPlayerWindow.xaml.cs` in `desktop_app/KinetixAI.Desktop/` (borderless maximized window, MediaElement with `Stretch="Uniform"`, floating glass HUD with Play/Pause, Step -1f/+5s, Scrub Slider, Timecode `mm:ss.ff`, Volume/Mute, Video Resolution badge `1280x720 • 30fps`, 2.5s mouse-idle auto-hide timer, and keyboard event routing for `Space`, `Esc`, `Left`, `Right`, `M`, `F11`)
+- [X] T094 [P] [US14] Integrate FullScreen Cinema Mode into `MainWindow.xaml` and `MainWindow.xaml.cs` (add `BtnFullScreen` "⛶ Toàn Màn Hình [F11]" button in Program Monitor Transport Deck, double-click on `BorderVideoMonitor` to toggle FullScreen, `Window_KeyDown` listener for `F11` and `F`, and bidirectional playhead position & playing state transfer)
+- [X] T095 [US14] Verify `dotnet build desktop_app/KinetixAI.Desktop/KinetixAI.Desktop.csproj` (`0 Warning(s), 0 Error(s)`) and `uv run pytest -v` (100% pass across all 30 tests)
+- [X] T096 [US14] Launch `.\run_desktop.ps1`, test live FullScreen Cinema Player with `tap_01_tuoi_30_podcast`, verify auto-hiding HUD and keyboard controls, mark all tasks `[X]`, and push v6.1 to GitHub

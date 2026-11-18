@@ -27,3 +27,31 @@
 | `POST` | `/api/v1/voices/design` | Design synthetic VoiceProfile from prompt description & seed |
 | `POST` | `/api/v1/voices/clone` | Consent-gated Voice Cloning from clean reference audio |
 | `GET` | `/api/v1/voices/profiles` | List all built-in + custom designed/cloned VoiceProfiles |
+
+---
+
+## 3. v6.1 FullScreen Cinema Interaction & Keybinding Contract (US14)
+
+### 3.1 UI Navigation & Interaction Mappings
+| Trigger / Event | Source Control | Action / Contract |
+| :--- | :--- | :--- |
+| **Click `BtnFullScreen`** | Transport Deck (`MainWindow.xaml`) | Pauses `VideoPlayer`, transfers active media URI & position, opens `FullScreenPlayerWindow`. |
+| **Double-Click Monitor** | `VideoPlayer` / `MonitorBorder` | Toggles Fullscreen Cinema View. |
+| **`F11` or `F` Key** | Global Window `KeyDown` | Toggles between normal NLE layout and FullScreen Cinema mode. |
+| **`Space` Key** | `KeyDown` (Cinema Window) | Toggles Play / Pause of the active media stream. |
+| **`Esc` Key** | `KeyDown` (Cinema Window) | Closes Cinema Window, passes `ExitPosition` back to `MainWindow`, and restores NLE state. |
+| **`Left Arrow` (`←`)** | `KeyDown` (Cinema Window) | Jumps backward 5.0 seconds (`Position = Position - 5s`). |
+| **`Right Arrow` (`→`)** | `KeyDown` (Cinema Window) | Jumps forward 5.0 seconds (`Position = Position + 5s`). |
+| **`M` Key** | `KeyDown` (Cinema Window) | Toggles audio mute state. |
+| **Mouse Move** | Root Canvas (`FullScreenPlayerWindow`) | Restores Glass HUD opacity to `1.0` and resets the 2.5s idle countdown timer. |
+| **Mouse Idle (2.5s)** | `DispatcherTimer` Tick | Fades Glass HUD opacity to `0.0` for 100% unobstructed cinema view. |
+
+### 3.2 WPF Window Constructor Contract
+```csharp
+public partial class FullScreenPlayerWindow : Window
+{
+    public FullScreenPlayerWindow(string mediaPath, TimeSpan initialPosition, bool isPlaying, double volume);
+    public TimeSpan ExitPosition { get; }
+    public bool WasPlaying { get; }
+}
+```
