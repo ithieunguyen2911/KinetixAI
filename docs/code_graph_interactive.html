@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KinetixAI (FlowVids-AI) — Interactive Architectural Code Graph</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-canvas: #07090e;
+            --bg-panel: #0f131c;
+            --bg-surface: #171d2b;
+            --border-color: #242e42;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --domain-color: #38bdf8;
+            --app-color: #3b82f6;
+            --infra-color: #10b981;
+            --pres-color: #f59e0b;
+            --desktop-color: #a855f7;
+            --engines-color: #ec4899;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-canvas);
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* SIDEBAR CONTROLS */
+        #sidebar {
+            width: 380px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+        }
+
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(15, 19, 28, 0.8);
+            backdrop-filter: blur(8px);
+        }
+
+        .header h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge-ver {
+            font-size: 0.7rem;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #0284c7;
+            color: white;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .search-box {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 9px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--domain-color);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+        }
+
+        .filter-section {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .filter-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag-btn {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            color: var(--text-main);
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tag-btn .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .tag-btn.active {
+            border-color: currentColor;
+            background: rgba(255,255,255,0.06);
+        }
+
+        /* DETAILS INSPECTOR */
+        .inspector {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .inspector h2 {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .node-detail-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .node-detail-card h3 {
+            font-size: 1.05rem;
+            margin-bottom: 6px;
+            color: var(--domain-color);
+        }
+
+        .node-meta {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-family: monospace;
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+
+        .node-desc {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+
+        .detail-item {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .detail-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .file-link {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 6px 12px;
+            border-radius: 5px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            font-size: 0.78rem;
+            font-weight: 600;
+            transition: background 0.15s;
+        }
+
+        .file-link:hover {
+            background: #1d4ed8;
+        }
+
+        /* GRAPH CANVAS */
+        #graph-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            background: radial-gradient(circle at 50% 50%, #0d121c 0%, #06080c 100%);
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* GRAPH ELEMENTS */
+        .link {
+            stroke: #2a3449;
+            stroke-opacity: 0.6;
+            stroke-width: 1.5px;
+            transition: stroke 0.2s, stroke-opacity 0.2s;
+        }
+
+        .link.highlighted {
+            stroke: #38bdf8;
+            stroke-opacity: 1;
+            stroke-width: 2.5px;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+
+        .node:hover circle {
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+
+        .node-text {
+            font-size: 11px;
+            font-weight: 600;
+            fill: #e2e8f0;
+            pointer-events: none;
+            user-select: none;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+        }
+
+        .node-subtext {
+            font-size: 9px;
+            fill: #94a3b8;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        /* TOP FLOATING CONTROLS */
+        .graph-hud {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 19, 28, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        }
+
+        .hud-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+
+        .hud-btn:hover {
+            border-color: var(--domain-color);
+            background: rgba(56, 189, 248, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. SIDEBAR CONTROLS & INSPECTOR -->
+    <div id="sidebar">
+        <div class="header">
+            <h1>KinetixAI Code Graph <span class="badge-ver">v6.1</span></h1>
+            <p>Bản đồ trực quan toàn bộ hệ thống Clean Architecture, quan hệ phụ thuộc & luồng dữ liệu.</p>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Tìm kiếm module, class, interface..." autocomplete="off">
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-title">Lọc Theo Tầng Kiến Trúc (Layers)</div>
+            <div class="filter-tags" id="filterTags">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <div class="inspector">
+            <h2>Chi Tiết Thành Phần (Inspector)</h2>
+            <div id="inspectorContent">
+                <div style="color: var(--text-muted); font-size: 0.85rem; font-style: italic; text-align: center; margin-top: 40px;">
+                    Click vào bất kỳ node nào trên đồ thị để xem chi tiết kiến trúc, các hàm phương thức và đường dẫn file mã nguồn.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. INTERACTIVE GRAPH CONTAINER -->
+    <div id="graph-container">
+        <div class="graph-hud">
+            <span style="font-size: 0.75rem; color: var(--text-muted);" id="statsLabel">Đang tải...</span>
+            <button class="hud-btn" id="btnResetZoom">⟲ Reset Zoom</button>
+            <button class="hud-btn" id="btnRelayout">⚡ Bố Cục Lại</button>
+        </div>
+        <svg id="graphSvg"></svg>
+    </div>
+
+    <script>
+        // GRAPH DATA DEFINITION
+        const graphData = {
+            nodes: [
+                // 1. DOMAIN LAYER (Cyan)
+                { id: "VideoProject", label: "VideoProject", layer: "domain", type: "Entity", file: "src/domain/entities/video_project.py", desc: "Aggregate Root quản lý toàn bộ trạng thái dự án, media path, phụ đề, phân cảnh storyboard, timeline clips và nhật ký audit." },
+                { id: "StoryScene", label: "StoryScene", layer: "domain", type: "Entity", file: "src/domain/entities/studio_entities.py", desc: "Thực thể phân cảnh Storyboard (tiêu đề, bối cảnh, prompt visual, image_path, chuyển cảnh, SFX)." },
+                { id: "TimelineClip", label: "TimelineClip", layer: "domain", type: "Entity", file: "src/domain/entities/studio_entities.py", desc: "Khối clip đa tầng NLE tương tác trên 5 track (V2 Overlay, V1 Master, S1 Captions, A1 Voice, B1 BGM)." },
+                { id: "VoiceProfile", label: "VoiceProfile", layer: "domain", type: "Entity", file: "src/domain/entities/studio_entities.py", desc: "Hồ sơ giọng nói VoiceStudio (tạo giọng từ mô tả, nhân bản giọng có xác nhận consent, điều biến F0/tần số)." },
+                { id: "SubtitleSegment", label: "SubtitleSegment", layer: "domain", type: "Entity", file: "src/domain/entities/subtitle_segment.py", desc: "Phân đoạn phụ đề kèm mốc thời gian từng từ (WordTimestamp) cho hiệu ứng karaoke và canh lề phát sóng." },
+                { id: "ScriptParser", label: "PodcastScriptParser", layer: "domain", type: "Domain Service", file: "src/domain/services/podcast_script_parser.py", desc: "Dịch vụ bóc tách kịch bản podcast thành 16 Paragraph Beats, lọc bỏ ghi chú thu âm, tạo 8 visual scenes và ánh xạ BGM/SFX." },
+                { id: "IVideoProcessor", label: "IVideoProcessor", layer: "domain", type: "DIP Interface", file: "src/domain/interfaces/video_processor.py", desc: "Hợp đồng trừu tượng xử lý video (cắt gọt, reframe, color grade, render podcast Ken Burns, sidechain audio ducking)." },
+                { id: "IVisualAssetGenerator", label: "IVisualAssetGenerator", layer: "domain", type: "DIP Interface", file: "src/domain/interfaces/visual_generator.py", desc: "Hợp đồng trừu tượng tạo và phân giải hình ảnh minh họa Storyboard 16:9 cho từng phân cảnh kịch bản." },
+                { id: "IVoiceSynthesizer", label: "IVoiceSynthesizer", layer: "domain", type: "DIP Interface", file: "src/domain/interfaces/voice_synthesizer.py", desc: "Hợp đồng trừu tượng tổng hợp giọng đọc, thiết kế giọng, nhân bản giọng và quản lý nhà cung cấp TTS." },
+                { id: "IAudioAssetLibrary", label: "IAudioAssetLibrary", layer: "domain", type: "DIP Interface", file: "src/domain/interfaces/audio_library.py", desc: "Hợp đồng trừu tượng quản lý thư viện nhạc nền BGM (Piano Melancholic, Acoustic) và hiệu ứng âm thanh SFX." },
+
+                // 2. APPLICATION LAYER (Blue)
+                { id: "ProjectService", label: "ProjectService", layer: "application", type: "Service", file: "src/application/services/project_service.py", desc: "Use Case Service trung tâm điều phối toàn bộ vòng đời dự án, podcast video generation, audio dubbing, timeline editing." },
+                { id: "AutoPipeline", label: "AutoVideoPipeline", layer: "application", type: "Pipeline", file: "src/application/pipelines/auto_video_pipeline.py", desc: "Quy trình 5 bước tự động hóa (Tải source -> Tách audio -> Whisper transcribe -> Render overlay -> FFmpeg merge)." },
+                { id: "RendererFactory", label: "RendererFactory", layer: "application", type: "Factory", file: "src/application/factories/renderer_factory.py", desc: "Factory phân giải Render Engine (Remotion Adapter vs HyperFrames Adapter) tuân thủ OCP." },
+
+                // 3. INFRASTRUCTURE LAYER (Green)
+                { id: "FfmpegAdapter", label: "FfmpegAdapter", layer: "infrastructure", type: "Adapter", file: "src/infrastructure/processors/ffmpeg_adapter.py", desc: "Adapter bọc FFmpeg/FFprobe: Ken Burns zoompan B-roll, xfade cross-dissolve, sidechain auto-ducking, waveform HUD." },
+                { id: "StoryboardAdapter", label: "StoryboardVisualAdapter", layer: "infrastructure", type: "Adapter", file: "src/infrastructure/visuals/storyboard_visual_adapter.py", desc: "Adapter phân giải 8 tranh minh họa AI 16:9 (Docs artwork, Pollinations/Gemini Imagen, Pillow procedural canvas)." },
+                { id: "TtsVoiceAdapter", label: "TtsVoiceAdapter", layer: "infrastructure", type: "Adapter", file: "src/infrastructure/tts/tts_voice_adapter.py", desc: "Adapter tổng hợp giọng: Edge-TTS prosody streaming, VieNeu-TTS local ONNX, Gemini Acting TTS, ElevenLabs." },
+                { id: "StudioAudioAdapter", label: "StudioAudioLibraryAdapter", layer: "infrastructure", type: "Adapter", file: "src/infrastructure/audio/audio_library_adapter.py", desc: "Adapter thư viện âm thanh: Felt-piano harmonics, concert-hall sustain reverb (aecho), âm thanh quạt tắt, chuông tin nhắn." },
+                { id: "WhisperAdapter", label: "WhisperAdapter", layer: "infrastructure", type: "Adapter", file: "src/infrastructure/transcribers/whisper_adapter.py", desc: "Adapter bọc faster-whisper trích xuất phụ đề chi tiết từng từ." },
+                { id: "YtDlpAdapter", label: "YtDlpAdapter", layer: "infrastructure", type: "Adapter", file: "src/infrastructure/downloaders/ytdlp_adapter.py", desc: "Adapter bọc yt-dlp tải video/audio và trích xuất siêu dữ liệu media." },
+                { id: "JsonRepo", label: "JsonProjectRepository", layer: "infrastructure", type: "Repository", file: "src/infrastructure/repositories/json_project_repository.py", desc: "Kho lưu trữ dự án với cơ chế hot-reloading theo mtime và cách ly lỗi từng phần (fault isolation)." },
+                { id: "RemotionAdapter", label: "RemotionAdapter", layer: "infrastructure", type: "Renderer", file: "src/infrastructure/renderers/remotion_adapter.py", desc: "Adapter gọi Render Engine Remotion React thông qua giao tiếp subprocess Node.js." },
+                { id: "HyperFramesAdapter", label: "HyperFramesAdapter", layer: "infrastructure", type: "Renderer", file: "src/infrastructure/renderers/hyperframes_adapter.py", desc: "Adapter gọi Render Engine HyperFrames HTML5/GSAP thông qua subprocess Node.js." },
+
+                // 4. PRESENTATION LAYER (Orange)
+                { id: "FastApiMain", label: "FastAPI Core Server", layer: "presentation", type: "API", file: "src/presentation/api/main.py", desc: "REST API Server cung cấp các endpoints /projects, /voices, /timeline-clips, /podcast, /dubbing, /health." },
+                { id: "McpServer", label: "Antigravity MCP Server", layer: "presentation", type: "MCP Server", file: "src/presentation/mcp/mcp_server.py", desc: "Cổng kết nối AI Agent thông minh cung cấp 27 MCP Tools cho Antigravity." },
+                { id: "PydanticSchemas", label: "Pydantic Schemas", layer: "presentation", type: "Contracts", file: "src/presentation/schemas/project_schemas.py", desc: "Định nghĩa hợp đồng dữ liệu JSON DTO xác thực nghiêm ngặt đầu vào/đầu ra." },
+
+                // 5. DESKTOP CLIENT (Purple)
+                { id: "WpfMainWindow", label: "MainWindow (WPF NLE)", layer: "desktop", type: "Desktop UI", file: "desktop_app/KinetixAI.Desktop/MainWindow.xaml.cs", desc: "Giao diện làm việc Desktop NLE chính: Program Monitor, 5-track timeline, 6 tab studio, điều khiển playback." },
+                { id: "WpfFullScreen", label: "FullScreenPlayerWindow", layer: "desktop", type: "Cinema Preview", file: "desktop_app/KinetixAI.Desktop/FullScreenPlayerWindow.xaml.cs", desc: "Rạp chiếu toàn màn hình chuẩn 1:1, kính mờ Glass HUD tự động ẩn sau 2.5s không di chuột, phím tắt F11/Space/Esc." },
+                { id: "WpfApiModels", label: "ApiModels (C# DTO)", layer: "desktop", type: "Desktop Contracts", file: "desktop_app/KinetixAI.Desktop/Models/ApiModels.cs", desc: "Mô hình C# ánh xạ 1:1 với Pydantic Schemas của Core Orchestrator." },
+
+                // 6. RENDER ENGINES (Pink)
+                { id: "RemotionEngine", label: "Remotion React Engine", layer: "engines", type: "Node.js Engine", file: "render_engines/remotion_engine/render.mjs", desc: "Bộ máy dựng chữ động và đồ họa chuyển động bằng React + Chromium headless." },
+                { id: "HyperFramesEngine", label: "HyperFrames GSAP Engine", layer: "engines", type: "Node.js Engine", file: "render_engines/hyperframes_engine/render.mjs", desc: "Bộ máy dựng motion graphics bằng HTML5 Canvas + GSAP animations." }
+            ],
+            links: [
+                // Presentation -> Application
+                { source: "WpfMainWindow", target: "FastApiMain", relation: "HTTP /api/v1" },
+                { source: "WpfFullScreen", target: "WpfMainWindow", relation: "Bidirectional Playhead Sync" },
+                { source: "WpfMainWindow", target: "WpfApiModels", relation: "Uses" },
+                { source: "FastApiMain", target: "ProjectService", relation: "Delegates Use Case" },
+                { source: "FastApiMain", target: "PydanticSchemas", relation: "Validates" },
+                { source: "McpServer", target: "ProjectService", relation: "Invokes Tools" },
+
+                // Application -> Domain (Entities & DIP Interfaces)
+                { source: "ProjectService", target: "VideoProject", relation: "Mutates & Manages" },
+                { source: "ProjectService", target: "ScriptParser", relation: "Invokes Service" },
+                { source: "ProjectService", target: "IVideoProcessor", relation: "Depends via DIP" },
+                { source: "ProjectService", target: "IVisualAssetGenerator", relation: "Depends via DIP" },
+                { source: "ProjectService", target: "IVoiceSynthesizer", relation: "Depends via DIP" },
+                { source: "ProjectService", target: "IAudioAssetLibrary", relation: "Depends via DIP" },
+                { source: "ProjectService", target: "JsonRepo", relation: "Persists Via" },
+                { source: "AutoPipeline", target: "RendererFactory", relation: "Resolves Engine" },
+
+                // Domain Aggregates
+                { source: "VideoProject", target: "StoryScene", relation: "Contains List" },
+                { source: "VideoProject", target: "TimelineClip", relation: "Contains List" },
+                { source: "VideoProject", target: "SubtitleSegment", relation: "Contains List" },
+
+                // Infrastructure Implements Domain Interfaces
+                { source: "FfmpegAdapter", target: "IVideoProcessor", relation: "Implements Interface" },
+                { source: "StoryboardAdapter", target: "IVisualAssetGenerator", relation: "Implements Interface" },
+                { source: "TtsVoiceAdapter", target: "IVoiceSynthesizer", relation: "Implements Interface" },
+                { source: "StudioAudioAdapter", target: "IAudioAssetLibrary", relation: "Implements Interface" },
+                { source: "RemotionAdapter", target: "RemotionEngine", relation: "Spawns Subprocess" },
+                { source: "HyperFramesAdapter", target: "HyperFramesEngine", relation: "Spawns Subprocess" }
+            ]
+        };
+
+        const layersConfig = {
+            domain: { name: "1. Domain Layer", color: "#38bdf8" },
+            application: { name: "2. Application Layer", color: "#3b82f6" },
+            infrastructure: { name: "3. Infrastructure Layer", color: "#10b981" },
+            presentation: { name: "4. Presentation Layer", color: "#f59e0b" },
+            desktop: { name: "Desktop Client (C# WPF)", color: "#a855f7" },
+            engines: { name: "Motion Render Engines", color: "#ec4899" }
+        };
+
+        let activeFilters = new Set(Object.keys(layersConfig));
+        let searchTerm = "";
+
+        // RENDER FILTER TAGS
+        const filterContainer = document.getElementById("filterTags");
+        Object.entries(layersConfig).forEach(([key, cfg]) => {
+            const btn = document.createElement("button");
+            btn.className = "tag-btn active";
+            btn.style.color = cfg.color;
+            btn.innerHTML = `<span class="dot" style="background:${cfg.color}"></span>${cfg.name}`;
+            btn.onclick = () => {
+                if (activeFilters.has(key)) {
+                    activeFilters.delete(key);
+                    btn.classList.remove("active");
+                } else {
+                    activeFilters.add(key);
+                    btn.classList.add("active");
+                }
+                updateGraph();
+            };
+            filterContainer.appendChild(btn);
+        });
+
+        // SEARCH INPUT
+        document.getElementById("searchInput").addEventListener("input", (e) => {
+            searchTerm = e.target.value.toLowerCase().trim();
+            updateGraph();
+        });
+
+        // D3 GRAPH SETUP
+        const svg = d3.select("#graphSvg");
+        const container = d3.select("#graph-container");
+        const width = container.node().getBoundingClientRect().width;
+        const height = container.node().getBoundingClientRect().height;
+
+        const g = svg.append("g");
+
+        // Zoom Behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.3, 3])
+            .on("zoom", (e) => g.attr("transform", e.transform));
+        svg.call(zoom);
+
+        document.getElementById("btnResetZoom").onclick = () => {
+            svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.85));
+        };
+
+        // Arrow Marker
+        svg.append("defs").append("marker")
+            .attr("id", "arrow")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 22)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#475569");
+
+        // Simulation
+        const simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(140))
+            .force("charge", d3.forceManyBody().strength(-450))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(45));
+
+        document.getElementById("btnRelayout").onclick = () => {
+            simulation.alpha(1).restart();
+        };
+
+        let linkSelection = g.append("g").attr("class", "links").selectAll(".link");
+        let nodeSelection = g.append("g").attr("class", "nodes").selectAll(".node");
+
+        function updateGraph() {
+            const filteredNodes = graphData.nodes.filter(n => {
+                const layerMatch = activeFilters.has(n.layer);
+                const searchMatch = !searchTerm || n.label.toLowerCase().includes(searchTerm) || n.file.toLowerCase().includes(searchTerm);
+                return layerMatch && searchMatch;
+            });
+
+            const nodeIds = new Set(filteredNodes.map(n => n.id));
+            const filteredLinks = graphData.links.filter(l => {
+                const s = typeof l.source === "object" ? l.source.id : l.source;
+                const t = typeof l.target === "object" ? l.target.id : l.target;
+                return nodeIds.has(s) && nodeIds.has(t);
+            });
+
+            document.getElementById("statsLabel").innerText = `${filteredNodes.length} Nodes • ${filteredLinks.length} Connections`;
+
+            // UPDATE LINKS
+            linkSelection = linkSelection.data(filteredLinks, d => `${d.source.id || d.source}->${d.target.id || d.target}`);
+            linkSelection.exit().remove();
+            const linkEnter = linkSelection.enter().append("line")
+                .attr("class", "link")
+                .attr("marker-end", "url(#arrow)");
+            linkSelection = linkEnter.merge(linkSelection);
+
+            // UPDATE NODES
+            nodeSelection = nodeSelection.data(filteredNodes, d => d.id);
+            nodeSelection.exit().remove();
+
+            const nodeEnter = nodeSelection.enter().append("g")
+                .attr("class", "node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+                .on("click", (event, d) => showInspector(d));
+
+            nodeEnter.append("circle")
+                .attr("r", d => d.type.includes("Service") || d.type.includes("Root") ? 16 : 12)
+                .attr("fill", d => layersConfig[d.layer].color)
+                .attr("stroke", "#ffffff")
+                .attr("stroke-width", 2)
+                .attr("opacity", 0.95);
+
+            nodeEnter.append("text")
+                .attr("class", "node-text")
+                .attr("dx", 18)
+                .attr("dy", 4)
+                .text(d => d.label);
+
+            nodeEnter.append("text")
+                .attr("class", "node-subtext")
+                .attr("dx", 18)
+                .attr("dy", 16)
+                .text(d => `[${d.type}]`);
+
+            nodeSelection = nodeEnter.merge(nodeSelection);
+
+            simulation.nodes(filteredNodes);
+            simulation.force("link").links(filteredLinks);
+            simulation.alpha(0.8).restart();
+        }
+
+        simulation.on("tick", () => {
+            linkSelection
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            nodeSelection.attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+
+        function dragstarted(event) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            event.subject.fx = event.subject.x;
+            event.subject.fy = event.subject.y;
+        }
+
+        function dragged(event) {
+            event.subject.fx = event.x;
+            event.subject.fy = event.y;
+        }
+
+        function dragended(event) {
+            if (!event.active) simulation.alphaTarget(0);
+            event.subject.fx = null;
+            event.subject.fy = null;
+        }
+
+        // SHOW INSPECTOR
+        function showInspector(node) {
+            const container = document.getElementById("inspectorContent");
+            const layerInfo = layersConfig[node.layer];
+
+            container.innerHTML = `
+                <div class="node-detail-card" style="border-left: 4px solid ${layerInfo.color};">
+                    <span style="font-size: 0.7rem; color: ${layerInfo.color}; font-weight: 700; text-transform: uppercase;">
+                        ${layerInfo.name} • ${node.type}
+                    </span>
+                    <h3 style="margin-top: 4px;">${node.label}</h3>
+                    <div class="node-meta">${node.file}</div>
+                    <div class="node-desc">${node.desc}</div>
+
+                    <div class="detail-item">
+                        <div class="detail-label">Vai Trò Kiến Trúc</div>
+                        <div style="font-size: 0.8rem; color: #e2e8f0;">
+                            ${node.type === "DIP Interface" ? "Hợp đồng trừu tượng (DIP) bảo vệ hạt nhân Domain." :
+                              node.type === "Entity" ? "Thực thể nghiệp vụ thuần túy không chứa logic công nghệ." :
+                              node.type === "Adapter" ? "Cầu nối kỹ thuật tích hợp thư viện/công cụ thứ ba." :
+                              node.type === "Cinema Preview" ? "Cửa sổ rạp chiếu toàn màn hình chuẩn 1:1." : "Thành phần điều phối xử lý nghiệp vụ."}
+                        </div>
+                    </div>
+
+                    <a class="file-link" href="file:///${node.file.replace(/\\/g, '/')}" target="_blank">
+                        📂 Mở File Trong Editor
+                    </a>
+                </div>
+            `;
+        }
+
+        // INITIAL RENDER
+        updateGraph();
+        setTimeout(() => {
+            svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.82));
+        }, 300);
+    </script>
+</body>
+</html>
