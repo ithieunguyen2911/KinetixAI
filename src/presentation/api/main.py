@@ -18,6 +18,7 @@ from src.presentation.schemas.project_schemas import (
     CloneProjectRequest,
     ColorGradeRequest,
     ConcatClipsRequest,
+    ConfigureTtsProviderRequest,
     CreateProjectRequest,
     DubbingRequest,
     FxMotionRequest,
@@ -194,6 +195,21 @@ def create_app(workspace_root: Path | None = None) -> FastAPI:
     @app.get("/api/v1/voices/profiles")
     def list_voice_profiles() -> List[Dict[str, Any]]:
         return service.voice_synthesizer.list_voices()
+
+    @app.get("/api/v1/voices/providers")
+    def list_tts_providers() -> List[Dict[str, Any]]:
+        return service.voice_synthesizer.list_providers()
+
+    @app.post("/api/v1/voices/providers")
+    def configure_tts_provider(request: ConfigureTtsProviderRequest) -> Dict[str, Any]:
+        try:
+            return service.voice_synthesizer.configure_provider(
+                provider_id=request.provider_id,
+                api_key=request.api_key,
+                model_id=request.model_id,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/v1/voices/design")
     def design_custom_voice(request: VoiceDesignRequest) -> Dict[str, Any]:

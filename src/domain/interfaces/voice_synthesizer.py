@@ -49,6 +49,14 @@ class IVoiceSynthesizer(ABC):
         """Return saved VoiceDesign and VoiceCloning profiles."""
         return []
 
+    def list_providers(self) -> List[Dict[str, Any]]:
+        """Return available TTS engines/providers (Edge Prosody, VieNeu Local AI, Gemini TTS, ElevenLabs) and status."""
+        return []
+
+    def configure_provider(self, provider_id: str, api_key: str = "", model_id: str = "") -> Dict[str, Any]:
+        """Configure API credentials or model settings for an expressive TTS provider."""
+        raise NotImplementedError("configure_provider is not implemented.")
+
     def synthesize_podcast_script(
         self,
         turns: List[Dict[str, Any]],

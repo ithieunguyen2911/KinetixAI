@@ -65,7 +65,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        AppendLog("Kinetix Studio v5.0 initialized (Interactive Timeline CRUD, Podcast AI, VoiceStudio Cloning/Design).");
+        AppendLog("Kinetix Studio v6.0 initialized (Storyboard B-Roll Visuals, Expressive TTS Providers, Podcast AI, Interactive Timeline CRUD).");
         await EnsureBackendRunningAsync();
         await RefreshCustomVoicesAsync();
         await RefreshProjectsAsync(selectLatestIfNew: true, forceReloadList: true);
@@ -711,8 +711,10 @@ public partial class MainWindow : Window
         var docsDir = Path.Combine(repoRoot, "docs");
         string[] candidates =
         {
+            Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v6.0.html"),
             Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v5.0.html"),
             Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.html"),
+            Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v6.0.docx"),
             Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v5.0.docx"),
             Path.Combine(docsDir, "Tai_lieu_huong_dan_su_dung_Kinetix_Studio_v4.0.docx"),
         };
@@ -825,6 +827,41 @@ public partial class MainWindow : Window
         finally
         {
             BtnDesignVoice.IsEnabled = true;
+        }
+    }
+
+    private async void BtnSaveTtsProvider_Click(object sender, RoutedEventArgs e)
+    {
+        BtnSaveTtsProvider.IsEnabled = false;
+        try
+        {
+            await EnsureBackendRunningAsync();
+            var providerId = GetComboTag(CmbTtsProvider, "gemini_tts");
+            var apiKey = TxtProviderApiKey.Text.Trim();
+            var req = new ConfigureTtsProviderRequestDto
+            {
+                ProviderId = providerId,
+                ApiKey = apiKey,
+                ModelId = string.Empty,
+            };
+            var response = await _http.PostAsJsonAsync("/api/v1/voices/providers", req);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                throw new Exception(err);
+            }
+            await RefreshCustomVoicesAsync();
+            var keyStatus = string.IsNullOrWhiteSpace(apiKey) ? "using default/env config" : "API Key saved";
+            AppendLog($"Configured TTS Engine '{providerId}' ({keyStatus}).");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Configure TTS provider error: {ex.Message}");
+            MessageBox.Show(ex.Message, "TTS Provider Configuration Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            BtnSaveTtsProvider.IsEnabled = true;
         }
     }
 
@@ -1302,6 +1339,41 @@ public partial class MainWindow : Window
         });
     }
 
+    private void BtnPickSceneImage_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "Image Files (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp|All Files (*.*)|*.*",
+            Title = "Chọn Ảnh Minh Họa (B-Roll) Cho Phân Cảnh"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        GridScenes.CommitEdit(DataGridEditingUnit.Cell, true);
+        GridScenes.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var target = GridScenes.SelectedItem as StorySceneDto ?? SceneItems.LastOrDefault();
+        if (target == null)
+        {
+            target = new StorySceneDto
+            {
+                SceneId = "scene_01",
+                Title = "Scene 01",
+                CharacterId = CharacterItems.FirstOrDefault()?.CharacterId ?? "char_host",
+                StartTime = 0.0,
+                DurationSec = 2.0,
+                TransitionIn = GetComboTag(CmbTransitionPreset, "fade_black"),
+                AnimationPreset = GetComboTag(CmbAnimationPreset, "spring_pop"),
+                SfxId = "sfx_whoosh_fast",
+                NarrationText = "New storyboard scene dialogue...",
+            };
+            SceneItems.Add(target);
+        }
+
+        target.ImagePath = dlg.FileName;
+        GridScenes.Items.Refresh();
+        AppendLog($"Assigned scene B-Roll image for '{target.SceneId}': {dlg.FileName}");
+    }
+
     private void BtnCloneScene_Click(object sender, RoutedEventArgs e)
     {
         var selected = GridScenes.SelectedItem as StorySceneDto ?? SceneItems.LastOrDefault();
@@ -1318,6 +1390,8 @@ public partial class MainWindow : Window
             TransitionIn = selected.TransitionIn,
             AnimationPreset = selected.AnimationPreset,
             SfxId = selected.SfxId,
+            VisualPrompt = selected.VisualPrompt,
+            ImagePath = selected.ImagePath,
         });
     }
 

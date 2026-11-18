@@ -29,6 +29,7 @@ from src.domain.interfaces.audio_library import IAudioAssetLibrary
 from src.domain.interfaces.media_downloader import IMediaDownloader
 from src.domain.interfaces.transcriber import ITranscriber
 from src.domain.interfaces.video_processor import IVideoProcessor
+from src.domain.interfaces.visual_generator import IVisualAssetGenerator
 from src.domain.interfaces.voice_synthesizer import IVoiceSynthesizer
 from src.infrastructure.audio.audio_library_adapter import StudioAudioLibraryAdapter
 from src.infrastructure.downloaders.ytdlp_adapter import YtDlpAdapter
@@ -36,6 +37,7 @@ from src.infrastructure.processors.ffmpeg_adapter import FfmpegAdapter
 from src.infrastructure.repositories.json_project_repository import JsonProjectRepository
 from src.infrastructure.transcribers.whisper_adapter import WhisperAdapter
 from src.infrastructure.tts.tts_voice_adapter import TtsVoiceAdapter
+from src.infrastructure.visuals.storyboard_visual_adapter import StoryboardVisualAdapter
 
 
 class ProjectService:
@@ -49,6 +51,7 @@ class ProjectService:
         transcriber: ITranscriber | None = None,
         voice_synthesizer: IVoiceSynthesizer | None = None,
         audio_library: IAudioAssetLibrary | None = None,
+        visual_generator: IVisualAssetGenerator | None = None,
     ) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         self.workspace_root = workspace_root or (repo_root / "workspace")
@@ -59,6 +62,7 @@ class ProjectService:
         self.transcriber = transcriber or WhisperAdapter()
         self.voice_synthesizer = voice_synthesizer or TtsVoiceAdapter()
         self.audio_library = audio_library or StudioAudioLibraryAdapter()
+        self.visual_generator = visual_generator or StoryboardVisualAdapter()
 
     def inspect_source(self, source_url: str) -> Dict[str, Any]:
         """Inspect remote URL or local media file metadata via IMediaDownloader.extract_metadata."""
@@ -1156,9 +1160,87 @@ class ProjectService:
             chapter_dicts[-1]["end_time"] = round(total_dur, 3)
             parsed.chapters[-1].end_time = total_dur
 
-        # Populate StoryScenes from Chapters (or turns for short dialogues)
+        # Resolve Storyboard Visual Scenes (B-Roll Illustrations + Ken Burns timing)
+        storyboard_dir = project_dir / "assets" / "storyboard"
+        storyboard_dir.mkdir(parents=True, exist_ok=True)
+        existing_scene_images = {
+            s.scene_id: s.image_path
+            for s in project.scenes
+            if s.image_path and Path(s.image_path).exists()
+        }
+
+        raw_visual_specs: List[Dict[str, Any]] = []
+        if parsed.visual_scenes and parsed.chapters:
+            # Map each visual scene cleanly onto its parent chapter's exact audio window
+            by_chap: Dict[int, List[Dict[str, Any]]] = {}
+            for vs in parsed.visual_scenes:
+                by_chap.setdefault(int(vs.get("chapter_index", 0)), []).append(vs)
+
+            for chap in parsed.chapters:
+                c_list = by_chap.get(chap.chapter_index, [])
+                if not c_list:
+                    continue
+                c_span = max(0.5, chap.end_time - chap.start_time)
+                r_min = float(c_list[0].get("start_ratio", 0.0))
+                r_max = max(r_min + 0.001, float(c_list[-1].get("end_ratio", 1.0)))
+                for idx_in_c, vs in enumerate(c_list):
+                    rel_st = (float(vs.get("start_ratio", r_min)) - r_min) / (r_max - r_min)
+                    rel_en = (float(vs.get("end_ratio", r_max)) - r_min) / (r_max - r_min)
+                    v_st = chap.start_time + rel_st * c_span
+                    v_en = chap.end_time if idx_in_c == len(c_list) - 1 else (chap.start_time + rel_en * c_span)
+                    sid = str(vs.get("scene_id") or f"scene_{len(raw_visual_specs) + 1:02d}")
+                    raw_visual_specs.append(
+                        {
+                            "scene_id": sid,
+                            "chapter_index": chap.chapter_index,
+                            "title": str(vs.get("title") or chap.title),
+                            "mood": str(vs.get("mood") or chap.mood),
+                            "visual_prompt": str(vs.get("visual_prompt") or chap.title),
+                            "start_time": round(v_st, 3),
+                            "end_time": round(max(v_st + 0.4, v_en), 3),
+                            "image_path": existing_scene_images.get(sid),
+                        }
+                    )
+
+        if raw_visual_specs:
+            # Guarantee strictly contiguous [0.0 .. total_dur] coverage for smooth Ken Burns B-roll
+            raw_visual_specs[0]["start_time"] = 0.0
+            for i in range(1, len(raw_visual_specs)):
+                raw_visual_specs[i]["start_time"] = raw_visual_specs[i - 1]["end_time"]
+            raw_visual_specs[-1]["end_time"] = round(total_dur, 3)
+
+        scene_visuals = (
+            self.visual_generator.resolve_storyboard_batch(raw_visual_specs, storyboard_dir)
+            if raw_visual_specs
+            else []
+        )
+
+        # Populate StoryScenes from resolved visual storyboard scenes (or turns for short dialogues)
         project.scenes = []
-        if parsed.is_structured_narrative and parsed.chapters:
+        if scene_visuals:
+            for idx, sv in enumerate(scene_visuals, start=1):
+                c_idx = int(sv.get("chapter_index", 0))
+                chap_sfx = next(
+                    (c.sfx_id for c in parsed.sfx_cues if c.chapter_index == c_idx and idx == 1),
+                    "none",
+                )
+                project.scenes.append(
+                    StoryScene(
+                        scene_id=str(sv["scene_id"]),
+                        title=str(sv["title"]),
+                        setting_context=f"{parsed.episode_title} • {str(sv.get('mood', 'studio')).upper()}",
+                        character_id=project.characters[0].character_id if project.characters else "char_host",
+                        narration_text=str(sv["title"]),
+                        start_time=float(sv["start_time"]),
+                        duration_sec=max(0.4, round(float(sv["end_time"]) - float(sv["start_time"]), 3)),
+                        transition_in="cross_dissolve" if sv.get("mood") == "hopeful" else "fade_black",
+                        animation_preset="ken_burns_zoom",
+                        sfx_id=chap_sfx,
+                        visual_prompt=str(sv.get("visual_prompt") or ""),
+                        image_path=str(sv.get("image_path")) if sv.get("image_path") else None,
+                    )
+                )
+        elif parsed.is_structured_narrative and parsed.chapters:
             for idx, chap in enumerate(parsed.chapters, start=1):
                 chap_sfx = next(
                     (c.sfx_id for c in parsed.sfx_cues if c.chapter_index == chap.chapter_index),
@@ -1247,9 +1329,20 @@ class ProjectService:
         project.current_step = "Rendering Broadcast Podcast Video & Waveform..."
         self.repository.save(project)
 
-        voice_short = "NAM MINH" if "NamMinh" in project.voice_id else (
-            "HOAI MY" if "HoaiMy" in project.voice_id else project.voice_id[:16].upper()
-        )
+        vid_low = project.voice_id.lower()
+        if "vieneu" in vid_low:
+            voice_short = "VIENEU AI"
+        elif "gemini" in vid_low:
+            voice_short = "GEMINI AI"
+        elif "eleven" in vid_low:
+            voice_short = "ELEVENLABS"
+        elif "namminh" in vid_low:
+            voice_short = "NAM MINH"
+        elif "hoaimy" in vid_low:
+            voice_short = "HOAI MY"
+        else:
+            voice_short = project.voice_id[:16].upper()
+
         speaker_badge = f"VOICE • {voice_short}"
         final_pod = project_dir / f"{project.project_id}_podcast_final.mp4"
 
@@ -1266,6 +1359,7 @@ class ProjectService:
                 bgm_transition_sec=bgm_transition_sec,
                 bgm_volume=bgm_volume,
                 sfx_events=sfx_events,
+                scene_visuals=scene_visuals,
             )
             project.final_output_path = rendered_mp4
             if not project.raw_video_path or not project.raw_video_path.exists():

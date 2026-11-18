@@ -112,6 +112,12 @@ public class StorySceneDto
 
     [JsonPropertyName("sfx_id")]
     public string SfxId { get; set; } = "sfx_whoosh_fast";
+
+    [JsonPropertyName("visual_prompt")]
+    public string VisualPrompt { get; set; } = string.Empty;
+
+    [JsonPropertyName("image_path")]
+    public string? ImagePath { get; set; }
 }
 
 public class AuditLogEntryDto
@@ -253,6 +259,18 @@ public class VoiceCloneRequestDto
 
     [JsonPropertyName("language")]
     public string Language { get; set; } = "vi-VN";
+}
+
+public class ConfigureTtsProviderRequestDto
+{
+    [JsonPropertyName("provider_id")]
+    public string ProviderId { get; set; } = "gemini_tts";
+
+    [JsonPropertyName("api_key")]
+    public string ApiKey { get; set; } = string.Empty;
+
+    [JsonPropertyName("model_id")]
+    public string ModelId { get; set; } = string.Empty;
 }
 
 public class VoiceProfileDto

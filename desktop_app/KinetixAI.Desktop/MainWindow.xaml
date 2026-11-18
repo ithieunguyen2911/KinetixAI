@@ -1,7 +1,7 @@
 <Window x:Class="KinetixAI.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kinetix Studio v5.0 — AI Storyboard, Podcast, VoiceStudio &amp; Multi-Track NLE Workstation"
+        Title="Kinetix Studio v6.0 — AI Storyboard, Podcast, VoiceStudio &amp; Multi-Track NLE Workstation"
         Height="960" Width="1640"
         MinHeight="800" MinWidth="1360"
         WindowStartupLocation="CenterScreen"
@@ -165,7 +165,7 @@
                     <Border Width="8" Height="18" Background="{StaticResource AccentPrimary}" CornerRadius="2" Margin="0,0,8,0"/>
                     <TextBlock Text="KINETIX STUDIO" FontSize="13" FontWeight="Bold" Foreground="#F9FAFB" VerticalAlignment="Center"/>
                     <Border Background="#181C26" BorderBrush="#282E3D" BorderThickness="1" CornerRadius="3" Padding="6,2" Margin="7,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="v5.0 NLE" FontSize="10" Foreground="#60A5FA" FontFamily="Consolas" FontWeight="Bold"/>
+                        <TextBlock Text="v6.0 NLE" FontSize="10" Foreground="#60A5FA" FontFamily="Consolas" FontWeight="Bold"/>
                     </Border>
                 </StackPanel>
 
@@ -261,7 +261,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="Project ID" Foreground="#9CA3AF" FontSize="10" Margin="0,0,0,2"/>
-                                <TextBox x:Name="TxtProjectId" Text="studio_master_v5" Style="{StaticResource StudioTextBox}"/>
+                                <TextBox x:Name="TxtProjectId" Text="studio_master_v6" Style="{StaticResource StudioTextBox}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="Render Engine" Foreground="#9CA3AF" FontSize="10" Margin="0,0,0,2"/>
@@ -765,9 +765,10 @@
                                 </Border>
 
                                 <Grid Grid.Row="2" Margin="0,0,0,4">
-                                    <TextBlock Text="STORYBOARD SCENES (THÊM / SỬA / NHÂN BẢN / XÓA PHÂN CẢNH)" FontSize="9.5" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
+                                    <TextBlock Text="STORYBOARD SCENES (THÊM / SỬA / CHỌN ẢNH / NHÂN BẢN / XÓA PHÂN CẢNH)" FontSize="9.5" FontWeight="Bold" Foreground="#9CA3AF" VerticalAlignment="Center"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                         <Button x:Name="BtnAddScene" Content="+ Thêm Cảnh" Click="BtnAddScene_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10" Margin="0,0,4,0"/>
+                                        <Button x:Name="BtnPickSceneImage" Content="Chọn Ảnh Cảnh" Click="BtnPickSceneImage_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10" Margin="0,0,4,0"/>
                                         <Button x:Name="BtnCloneScene" Content="Nhân bản" Click="BtnCloneScene_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10" Margin="0,0,4,0"/>
                                         <Button x:Name="BtnDeleteScene" Content="Xóa Cảnh" Click="BtnDeleteScene_Click" Style="{StaticResource StudioSecondaryButton}" Padding="7,2" FontSize="10" Margin="0,0,4,0"/>
                                         <Button x:Name="BtnSaveScenes" Content="Lưu Phân Cảnh" Click="BtnSaveScenes_Click" Style="{StaticResource StudioPrimaryButton}" Padding="8,2" FontSize="10"/>
@@ -789,6 +790,8 @@
                                         <DataGridTextColumn Header="DUR" Binding="{Binding DurationSec}" Width="48"/>
                                         <DataGridTextColumn Header="CHUYỂN CẢNH" Binding="{Binding TransitionIn}" Width="92"/>
                                         <DataGridTextColumn Header="SFX" Binding="{Binding SfxId}" Width="98"/>
+                                        <DataGridTextColumn Header="ẢNH MINH HỌA (B-ROLL)" Binding="{Binding ImagePath}" Width="140"/>
+                                        <DataGridTextColumn Header="PROMPT HÌNH ẢNH AI" Binding="{Binding VisualPrompt}" Width="160"/>
                                         <DataGridTextColumn Header="LỜI THOẠI / BỐI CẢNH CHI TIẾT" Binding="{Binding NarrationText}" Width="*"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -849,8 +852,12 @@
                                     <StackPanel>
                                         <TextBlock Text="1. GIỌNG ĐỌC TTS (VOICEOVER)" FontSize="9.5" FontWeight="Bold" Foreground="#60A5FA" Margin="0,0,0,5"/>
                                         <ComboBox x:Name="CmbVoiceId" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Margin="0,0,0,5">
-                                            <ComboBoxItem Content="vi-VN-HoaiMyNeural (Female VI)" Tag="vi-VN-HoaiMyNeural"/>
-                                            <ComboBoxItem Content="vi-VN-NamMinhNeural (Male VI)" Tag="vi-VN-NamMinhNeural"/>
+                                            <ComboBoxItem Content="VieNeu AI: Nam Trầm Truyền Cảm (Local)" Tag="vieneu-nam-truyen-cam"/>
+                                            <ComboBoxItem Content="VieNeu AI: Nữ Kể Chuyện (Local)" Tag="vieneu-nu-truyen-cam"/>
+                                            <ComboBoxItem Content="Nam Minh Prosody v6 (Đêm Khuya)" Tag="vi-VN-NamMinhNeural"/>
+                                            <ComboBoxItem Content="Hoai My Prosody v6 (Truyền Cảm)" Tag="vi-VN-HoaiMyNeural"/>
+                                            <ComboBoxItem Content="Gemini Acting TTS (Charon)" Tag="gemini-charon-acting"/>
+                                            <ComboBoxItem Content="ElevenLabs Multilingual v2" Tag="elevenlabs-multilingual"/>
                                             <ComboBoxItem Content="en-US-AriaNeural (Female EN)" Tag="en-US-AriaNeural"/>
                                             <ComboBoxItem Content="en-US-GuyNeural (Male EN)" Tag="en-US-GuyNeural"/>
                                             <ComboBoxItem Content="en-US-JennyNeural (Friendly)" Tag="en-US-JennyNeural"/>
@@ -971,14 +978,22 @@
                                                 <ComboBoxItem Content="Truyền cảm hứng" Tag="motivational_epic"/>
                                             </ComboBox>
                                             <ComboBox x:Name="CmbPodcastHostVoice" Grid.Column="2" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Padding="4,3" FontSize="10">
-                                                <ComboBoxItem Content="Host: Hoai My" Tag="vi-VN-HoaiMyNeural"/>
-                                                <ComboBoxItem Content="Host: Nam Minh" Tag="vi-VN-NamMinhNeural"/>
+                                                <ComboBoxItem Content="VieNeu AI: Nam Trầm Truyền Cảm (Local)" Tag="vieneu-nam-truyen-cam"/>
+                                                <ComboBoxItem Content="VieNeu AI: Nữ Kể Chuyện (Local)" Tag="vieneu-nu-truyen-cam"/>
+                                                <ComboBoxItem Content="Nam Minh Prosody v6 (Đêm Khuya)" Tag="vi-VN-NamMinhNeural"/>
+                                                <ComboBoxItem Content="Hoai My Prosody v6 (Truyền Cảm)" Tag="vi-VN-HoaiMyNeural"/>
+                                                <ComboBoxItem Content="Gemini Acting TTS (Charon)" Tag="gemini-charon-acting"/>
+                                                <ComboBoxItem Content="ElevenLabs Multilingual v2" Tag="elevenlabs-multilingual"/>
                                                 <ComboBoxItem Content="Host: Aria (EN)" Tag="en-US-AriaNeural"/>
                                                 <ComboBoxItem Content="Host: Offline SAPI" Tag="win-sapi-studio"/>
                                             </ComboBox>
                                             <ComboBox x:Name="CmbPodcastGuestVoice" Grid.Column="4" SelectedIndex="1" Style="{StaticResource StudioComboBox}" Padding="4,3" FontSize="10">
-                                                <ComboBoxItem Content="Guest: Hoai My" Tag="vi-VN-HoaiMyNeural"/>
-                                                <ComboBoxItem Content="Guest: Nam Minh" Tag="vi-VN-NamMinhNeural"/>
+                                                <ComboBoxItem Content="VieNeu AI: Nam Trầm Truyền Cảm (Local)" Tag="vieneu-nam-truyen-cam"/>
+                                                <ComboBoxItem Content="VieNeu AI: Nữ Kể Chuyện (Local)" Tag="vieneu-nu-truyen-cam"/>
+                                                <ComboBoxItem Content="Nam Minh Prosody v6 (Đêm Khuya)" Tag="vi-VN-NamMinhNeural"/>
+                                                <ComboBoxItem Content="Hoai My Prosody v6 (Truyền Cảm)" Tag="vi-VN-HoaiMyNeural"/>
+                                                <ComboBoxItem Content="Gemini Acting TTS (Charon)" Tag="gemini-charon-acting"/>
+                                                <ComboBoxItem Content="ElevenLabs Multilingual v2" Tag="elevenlabs-multilingual"/>
                                                 <ComboBoxItem Content="Guest: Guy (EN)" Tag="en-US-GuyNeural"/>
                                                 <ComboBoxItem Content="Guest: Offline SAPI" Tag="win-sapi-studio"/>
                                             </ComboBox>
@@ -991,18 +1006,43 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Card 2: VoiceStudio Voice Design -->
-                                <Border Grid.Column="2" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="5" Padding="9">
-                                    <StackPanel>
-                                        <TextBlock Text="VOICESTUDIO: THIẾT KẾ GIỌNG" FontSize="9.5" FontWeight="Bold" Foreground="#34D399" Margin="0,0,0,5"/>
-                                        <TextBlock Text="Tên Profile giọng mới:" FontSize="9.5" Foreground="#9CA3AF" Margin="0,0,0,2"/>
-                                        <TextBox x:Name="TxtVoiceDesignName" Text="Giong Ke Chuyen Dem Khuya" Style="{StaticResource StudioTextBox}" Padding="5,3" FontSize="10.5" Margin="0,0,0,5"/>
-                                        <TextBlock Text="Mô tả giọng bằng lời (Voice Design):" FontSize="9.5" Foreground="#9CA3AF" Margin="0,0,0,2"/>
-                                        <TextBox x:Name="TxtVoiceDesignPrompt" Text="Giọng nam trầm ấm, kể chuyện đêm khuya truyền cảm, nhịp chậm vừa"
-                                                 Style="{StaticResource StudioTextBox}" AcceptsReturn="True" TextWrapping="Wrap" Height="42" Padding="5,3" FontSize="10" Margin="0,0,0,6"/>
-                                        <Button x:Name="BtnDesignVoice" Content="Thiết Kế &amp; Lưu Giọng Mới" Click="BtnDesignVoice_Click"
-                                                Style="{StaticResource StudioSecondaryButton}" Padding="7,5" FontSize="10"/>
-                                    </StackPanel>
+                                <!-- Card 2: VoiceStudio Voice Design & Expressive TTS Provider Config -->
+                                <Border Grid.Column="2" Background="#12161F" BorderBrush="#242B3A" BorderThickness="1" CornerRadius="5" Padding="8">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <StackPanel>
+                                            <TextBlock Text="VOICESTUDIO: THIẾT KẾ GIỌNG" FontSize="9.5" FontWeight="Bold" Foreground="#34D399" Margin="0,0,0,3"/>
+                                            <TextBlock Text="Tên Profile giọng mới:" FontSize="9" Foreground="#9CA3AF" Margin="0,0,0,1"/>
+                                            <TextBox x:Name="TxtVoiceDesignName" Text="Giong Ke Chuyen Dem Khuya" Style="{StaticResource StudioTextBox}" Padding="5,2" FontSize="10" Margin="0,0,0,3"/>
+                                            <TextBlock Text="Mô tả giọng bằng lời (Voice Design):" FontSize="9" Foreground="#9CA3AF" Margin="0,0,0,1"/>
+                                            <TextBox x:Name="TxtVoiceDesignPrompt" Text="Giọng nam trầm ấm, kể chuyện đêm khuya truyền cảm, nhịp chậm vừa"
+                                                     Style="{StaticResource StudioTextBox}" AcceptsReturn="True" TextWrapping="Wrap" Height="32" Padding="5,2" FontSize="9.5" Margin="0,0,0,4"/>
+                                            <Button x:Name="BtnDesignVoice" Content="Thiết Kế &amp; Lưu Giọng Mới" Click="BtnDesignVoice_Click"
+                                                    Style="{StaticResource StudioSecondaryButton}" Padding="6,3" FontSize="9.5" Margin="0,0,0,6"/>
+
+                                            <Border BorderBrush="#242B3A" BorderThickness="0,1,0,0" Padding="0,5,0,0">
+                                                <StackPanel>
+                                                    <TextBlock Text="CẤU HÌNH ENGINE GIỌNG ĐỌC CAO CẤP (GEMINI / ELEVENLABS)" FontSize="8.8" FontWeight="Bold" Foreground="#60A5FA" TextWrapping="Wrap" Margin="0,0,0,3"/>
+                                                    <ComboBox x:Name="CmbTtsProvider" SelectedIndex="0" Style="{StaticResource StudioComboBox}" Padding="4,2" FontSize="9.5" Margin="0,0,0,3">
+                                                        <ComboBoxItem Content="gemini_tts (Gemini Acting TTS)" Tag="gemini_tts"/>
+                                                        <ComboBoxItem Content="elevenlabs_tts (ElevenLabs v2)" Tag="elevenlabs_tts"/>
+                                                        <ComboBoxItem Content="vieneu_local (VieNeu Local AI)" Tag="vieneu_local"/>
+                                                        <ComboBoxItem Content="edge_prosody_v6 (Edge Prosody v6)" Tag="edge_prosody_v6"/>
+                                                    </ComboBox>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="4"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBox x:Name="TxtProviderApiKey" Grid.Column="0" Text="" Style="{StaticResource StudioTextBox}" Padding="5,2" FontSize="9.5"
+                                                                 ToolTip="Nhập GEMINI_API_KEY hoặc ELEVENLABS_API_KEY (tùy chọn)"/>
+                                                        <Button x:Name="BtnSaveTtsProvider" Grid.Column="2" Content="Lưu API Key" Click="BtnSaveTtsProvider_Click"
+                                                                Style="{StaticResource StudioPrimaryButton}" Padding="7,3" FontSize="9.5"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </ScrollViewer>
                                 </Border>
 
                                 <!-- Card 3: Consent-Gated Voice Cloning & Video Dubbing -->
@@ -1226,7 +1266,7 @@
         <!-- BOTTOM WORKSTATION STATUS BAR -->
         <Border Grid.Row="2" Background="#0E1015" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0" Padding="14,0">
             <Grid>
-                <TextBlock Text="Clean Architecture: Domain -> Application -> Infrastructure -> Presentation  |  VoiceStudio + Podcast AI + Interactive NLE Timeline v5.0"
+                <TextBlock Text="Clean Architecture: Domain -> Application -> Infrastructure -> Presentation  |  VoiceStudio + Podcast AI + Storyboard Visuals + Interactive NLE Timeline v6.0"
                            FontSize="9.5" Foreground="#6B7280" VerticalAlignment="Center"/>
                 <TextBlock x:Name="TxtStatusRight" Text="No active project selected"
                            FontSize="9.5" FontFamily="Consolas" Foreground="#9CA3AF" HorizontalAlignment="Right" VerticalAlignment="Center"/>

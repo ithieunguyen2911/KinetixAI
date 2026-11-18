@@ -191,6 +191,7 @@ class IVideoProcessor(ABC):
         bgm_transition_sec: float | None = None,
         bgm_volume: float = 0.14,
         sfx_events: List[Dict[str, Any]] | None = None,
+        scene_visuals: List[Dict[str, Any]] | None = None,
     ) -> Path:
-        """Render a broadcast-grade 1280x720@30fps Podcast MP4 with live voice waveform, Chapter HUD, wrapped .ass captions, SFX, and 2-stage BGM."""
+        """Render a broadcast-grade 1280x720@30fps Podcast MP4 with Ken Burns storyboard B-roll, live voice waveform, Chapter HUD, wrapped .ass captions, SFX, and sidechain-ducked 2-stage BGM."""
         raise NotImplementedError("render_podcast_video is not implemented by this processor.")

@@ -7,6 +7,22 @@ from typing import Any, Dict, List
 from src.domain.interfaces.audio_library import IAudioAssetLibrary
 
 
+def _felt_piano_chord_expr(root_hz: float, third_hz: float, fifth_hz: float, color_hz: float) -> str:
+    """Build rich felt-hammer piano harmonic overtone voicing (0.5x bass + 1x + 0.42*2x + 0.16*3x)."""
+    bass_hz = round(root_hz * 0.5, 2)
+    r2, r3 = round(root_hz * 2.0, 2), round(root_hz * 3.0, 2)
+    t2, t3 = round(third_hz * 2.0, 2), round(third_hz * 3.0, 2)
+    f2 = round(fifth_hz * 2.0, 2)
+    c2 = round(color_hz * 2.0, 2)
+    return (
+        f"(0.13*sin(2*PI*{bass_hz}*t)"
+        f"+0.16*(sin(2*PI*{root_hz}*t)+0.42*sin(2*PI*{r2}*t)+0.16*sin(2*PI*{r3}*t))"
+        f"+0.12*(sin(2*PI*{third_hz}*t)+0.42*sin(2*PI*{t2}*t)+0.16*sin(2*PI*{t3}*t))"
+        f"+0.10*(sin(2*PI*{fifth_hz}*t)+0.42*sin(2*PI*{f2}*t))"
+        f"+0.07*(sin(2*PI*{color_hz}*t)+0.32*sin(2*PI*{c2}*t)))"
+    )
+
+
 class StudioAudioLibraryAdapter(IAudioAssetLibrary):
     """Generates and resolves curated royalty-free studio BGM beds & SFX audio cues via FFmpeg synthesis."""
 
@@ -53,13 +69,13 @@ class StudioAudioLibraryAdapter(IAudioAssetLibrary):
             "name": "Ambient Piano Melancholic (Late Night)",
             "bpm": 68,
             "mood": "Melancholic / Storytelling",
-            "post_filter": "lowpass=f=1800,highpass=f=55",
+            "post_filter": "lowpass=f=2100,highpass=f=55,aecho=0.8:0.86:72|138:0.30|0.20",
             "expr": (
-                "min(1,40*mod(t,1.75))*min(1,22*(1.75-mod(t,1.75)))*(0.35+0.65*exp(-1.1*mod(t,1.75)))*("
-                "lt(mod(t,14),3.5)*(0.19*sin(2*PI*110*t)+0.15*sin(2*PI*220*t)+0.14*sin(2*PI*261.63*t)+0.11*sin(2*PI*329.63*t)+0.05*sin(2*PI*493.88*t))"
-                "+gte(mod(t,14),3.5)*lt(mod(t,14),7.0)*(0.19*sin(2*PI*87.31*t)+0.15*sin(2*PI*174.61*t)+0.14*sin(2*PI*220*t)+0.11*sin(2*PI*261.63*t)+0.06*sin(2*PI*329.63*t))"
-                "+gte(mod(t,14),7.0)*lt(mod(t,14),10.5)*(0.19*sin(2*PI*146.83*t)+0.15*sin(2*PI*220*t)+0.13*sin(2*PI*293.66*t)+0.11*sin(2*PI*349.23*t)+0.05*sin(2*PI*261.63*t))"
-                "+gte(mod(t,14),10.5)*(0.19*sin(2*PI*82.41*t)+0.14*sin(2*PI*164.81*t)+0.14*sin(2*PI*207.65*t)+0.11*sin(2*PI*293.66*t)+0.06*sin(2*PI*329.63*t))"
+                "(1-exp(-35*mod(t,1.75)))*(0.28+0.72*exp(-1.15*mod(t,1.75)))*min(1,28*(1.75-mod(t,1.75)))*("
+                f"lt(mod(t,14),3.5)*{_felt_piano_chord_expr(220.00, 261.63, 329.63, 493.88)}"
+                f"+gte(mod(t,14),3.5)*lt(mod(t,14),7.0)*{_felt_piano_chord_expr(174.61, 220.00, 261.63, 329.63)}"
+                f"+gte(mod(t,14),7.0)*lt(mod(t,14),10.5)*{_felt_piano_chord_expr(146.83, 220.00, 293.66, 349.23)}"
+                f"+gte(mod(t,14),10.5)*{_felt_piano_chord_expr(164.81, 207.65, 246.94, 329.63)}"
                 ")"
             ),
         },
@@ -68,13 +84,13 @@ class StudioAudioLibraryAdapter(IAudioAssetLibrary):
             "name": "Inspiring Warm Acoustic & Piano (Hopeful)",
             "bpm": 76,
             "mood": "Hopeful / Turnaround",
-            "post_filter": "lowpass=f=2200,highpass=f=65",
+            "post_filter": "lowpass=f=2100,highpass=f=55,aecho=0.8:0.86:72|138:0.30|0.20",
             "expr": (
-                "min(1,45*mod(t,1.6))*min(1,24*(1.6-mod(t,1.6)))*(0.30+0.70*exp(-1.4*mod(t,1.6)))*("
-                "lt(mod(t,12.8),3.2)*(0.18*sin(2*PI*130.81*t)+0.15*sin(2*PI*196*t)+0.14*sin(2*PI*261.63*t)+0.12*sin(2*PI*329.63*t)+0.06*sin(2*PI*392*t))"
-                "+gte(mod(t,12.8),3.2)*lt(mod(t,12.8),6.4)*(0.18*sin(2*PI*98*t)+0.15*sin(2*PI*196*t)+0.14*sin(2*PI*246.94*t)+0.12*sin(2*PI*293.66*t)+0.06*sin(2*PI*392*t))"
-                "+gte(mod(t,12.8),6.4)*lt(mod(t,12.8),9.6)*(0.18*sin(2*PI*110*t)+0.15*sin(2*PI*220*t)+0.14*sin(2*PI*261.63*t)+0.11*sin(2*PI*329.63*t)+0.06*sin(2*PI*392*t))"
-                "+gte(mod(t,12.8),9.6)*(0.18*sin(2*PI*87.31*t)+0.15*sin(2*PI*174.61*t)+0.14*sin(2*PI*220*t)+0.12*sin(2*PI*261.63*t)+0.06*sin(2*PI*392*t))"
+                "(1-exp(-35*mod(t,1.6)))*(0.28+0.72*exp(-1.15*mod(t,1.6)))*min(1,28*(1.6-mod(t,1.6)))*("
+                f"lt(mod(t,12.8),3.2)*{_felt_piano_chord_expr(261.63, 329.63, 392.00, 493.88)}"
+                f"+gte(mod(t,12.8),3.2)*lt(mod(t,12.8),6.4)*{_felt_piano_chord_expr(196.00, 246.94, 293.66, 392.00)}"
+                f"+gte(mod(t,12.8),6.4)*lt(mod(t,12.8),9.6)*{_felt_piano_chord_expr(220.00, 261.63, 329.63, 392.00)}"
+                f"+gte(mod(t,12.8),9.6)*{_felt_piano_chord_expr(174.61, 220.00, 261.63, 392.00)}"
                 ")"
             ),
         },

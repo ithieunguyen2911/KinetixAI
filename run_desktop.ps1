@@ -1,4 +1,4 @@
-# Launch KinetixAI (FlowVids-AI) Native Windows WPF Desktop Application (NLE v5.0)
+# Launch KinetixAI (FlowVids-AI) Native Windows WPF Desktop Application (NLE v6.0)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -45,7 +45,7 @@ if (-not $backendReady) {
     Write-Warning "FastAPI Core Orchestrator did not respond within 15s; Desktop app will retry connection on load."
 }
 
-Write-Host "Building KinetixAI Desktop Studio (WPF NLE v5.0)..." -ForegroundColor Cyan
+Write-Host "Building KinetixAI Desktop Studio (WPF NLE v6.0)..." -ForegroundColor Cyan
 dotnet build desktop_app/KinetixAI.Desktop/KinetixAI.Desktop.csproj --nologo -v q
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed with exit code $LASTEXITCODE"
@@ -54,4 +54,4 @@ if ($LASTEXITCODE -ne 0) {
 
 $exePath = Join-Path $PSScriptRoot "desktop_app\KinetixAI.Desktop\bin\Debug\net10.0-windows\KinetixAI.Desktop.exe"
 $proc = Start-Process -FilePath $exePath -WorkingDirectory $PSScriptRoot -PassThru
-Write-Host "Kinetix Studio v5.0 NLE Workstation is now running (PID: $($proc.Id))." -ForegroundColor Green
+Write-Host "Kinetix Studio v6.0 NLE Workstation is now running (PID: $($proc.Id))." -ForegroundColor Green

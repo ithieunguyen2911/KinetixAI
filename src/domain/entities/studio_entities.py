@@ -82,7 +82,7 @@ class CharacterProfile:
 
 @dataclass
 class StoryScene:
-    """Storyboard scene segment binding context, character, voiceover line, transition & SFX."""
+    """Storyboard scene segment binding context, character, voiceover line, transition, SFX & visual illustration."""
 
     scene_id: str
     title: str
@@ -94,6 +94,8 @@ class StoryScene:
     transition_in: str = "fade_black"
     animation_preset: str = "spring_pop"
     sfx_id: str = "sfx_whoosh_fast"
+    visual_prompt: str = ""
+    image_path: str | None = None
 
     def __post_init__(self) -> None:
         self.scene_id = self.scene_id.strip() or f"scene_{uuid.uuid4().hex[:5]}"
@@ -114,6 +116,8 @@ class StoryScene:
             transition_in=str(data.get("transition_in") or "fade_black"),
             animation_preset=str(data.get("animation_preset") or "spring_pop"),
             sfx_id=str(data.get("sfx_id") or "sfx_whoosh_fast"),
+            visual_prompt=str(data.get("visual_prompt") or ""),
+            image_path=str(data["image_path"]) if data.get("image_path") else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -128,6 +132,8 @@ class StoryScene:
             "transition_in": self.transition_in,
             "animation_preset": self.animation_preset,
             "sfx_id": self.sfx_id,
+            "visual_prompt": self.visual_prompt,
+            "image_path": self.image_path,
         }
 
 

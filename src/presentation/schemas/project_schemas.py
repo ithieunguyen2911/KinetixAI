@@ -1,4 +1,4 @@
-"""Pydantic v2 Data Contracts for FastAPI REST Endpoints and Desktop Client (v3.0 Studio)."""
+"""Pydantic v2 Data Contracts for FastAPI REST Endpoints and Desktop Client (v6.0 Studio)."""
 
 from typing import List
 from pydantic import BaseModel, Field
@@ -46,6 +46,8 @@ class StorySceneSchema(BaseModel):
     transition_in: str = "fade_black"
     animation_preset: str = "spring_pop"
     sfx_id: str = "sfx_whoosh_fast"
+    visual_prompt: str = ""
+    image_path: str | None = None
 
 
 class AuditLogEntrySchema(BaseModel):
@@ -216,6 +218,15 @@ class VoiceCloneRequest(BaseModel):
     reference_audio_path: str = Field(min_length=1)
     consent_verified: bool = False
     language: str = "vi-VN"
+
+
+class ConfigureTtsProviderRequest(BaseModel):
+    provider_id: str = Field(
+        min_length=1,
+        description="edge_prosody_v6 | vieneu_local | gemini_tts | elevenlabs_tts",
+    )
+    api_key: str = ""
+    model_id: str = ""
 
 
 class DubbingRequest(BaseModel):

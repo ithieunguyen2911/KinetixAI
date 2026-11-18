@@ -978,13 +978,161 @@ class FfmpegAdapter(IVideoProcessor):
                 continue
             wrapped = cls.wrap_subtitle_text(raw_text, max_chars=max_chars, sep="\\N")
             line_count = wrapped.count("\\N") + 1
-            prefix = "{\\fs24}" if line_count >= 3 else ""
+            prefix = "{\\fad(160,140)\\fs24}" if line_count >= 3 else "{\\fad(160,140)}"
             start_ts = fmt_ass_time(seg.start_time)
             end_ts = fmt_ass_time(max(seg.start_time + 0.15, seg.end_time))
             lines.append(f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{prefix}{wrapped}")
 
         ass_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return ass_path
+
+    def _render_storyboard_broll_track(
+        self,
+        scene_visuals: List[Dict[str, Any]],
+        total_dur: float,
+        output_path: Path,
+        temp_files: List[Path],
+    ) -> Path | None:
+        """Render per-scene 30fps Ken Burns animated segments and concatenate seamlessly into a B-roll MP4."""
+        valid_scenes: List[Dict[str, Any]] = []
+        for sc in scene_visuals:
+            img_raw = sc.get("image_path")
+            if img_raw and Path(img_raw).is_file():
+                valid_scenes.append(sc)
+
+        if not valid_scenes:
+            return None
+
+        has_explicit_times = any(float(sc.get("end_time", 0.0) or 0.0) > 0.0 for sc in valid_scenes)
+        if has_explicit_times:
+            ordered = sorted(
+                enumerate(valid_scenes),
+                key=lambda pair: (float(pair[1].get("start_time", 0.0) or 0.0), pair[0]),
+            )
+            valid_scenes = [sc for _, sc in ordered]
+
+        n_scenes = len(valid_scenes)
+        durations: List[float] = []
+        if has_explicit_times and n_scenes > 1 and total_dur >= 0.6 * n_scenes:
+            bounds: List[float] = [0.0]
+            for idx in range(1, n_scenes):
+                raw_st = float(valid_scenes[idx].get("start_time", 0.0) or 0.0)
+                min_b = bounds[-1] + 0.45
+                max_b = total_dur - 0.45 * (n_scenes - idx)
+                bounds.append(max(min_b, min(max_b, raw_st)))
+            bounds.append(total_dur)
+            durations = [max(0.45, bounds[i + 1] - bounds[i]) for i in range(n_scenes)]
+        else:
+            even_dur = max(0.5, total_dur / float(n_scenes))
+            durations = [even_dur for _ in range(n_scenes)]
+            if durations:
+                durations[-1] = max(0.45, total_dur - sum(durations[:-1]))
+
+        clip_paths: List[Path] = []
+        for idx, (sc, dur_i) in enumerate(zip(valid_scenes, durations)):
+            img_path = Path(sc["image_path"])
+            frames = max(12, int(round(dur_i * 30.0)))
+            denom = max(1, frames - 1)
+            fade_d = round(min(0.60, max(0.15, dur_i * 0.24)), 2)
+            fade_out_st = round(max(0.05, (frames / 30.0) - fade_d), 2)
+
+            if idx % 2 == 0:
+                z_expr = f"1.0+0.10*(on/{denom})"
+                x_expr = f"(iw-iw/zoom)/2+(iw-iw/zoom)*0.20*(on/{denom}-0.5)"
+            else:
+                z_expr = f"1.10-0.10*(on/{denom})"
+                x_expr = f"(iw-iw/zoom)/2-(iw-iw/zoom)*0.20*(on/{denom}-0.5)"
+            y_expr = "(ih-ih/zoom)/2"
+
+            vf_scene = (
+                f"scale=1536:864:force_original_aspect_ratio=increase,crop=1536:864,"
+                f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':d={frames}:s=1280x720:fps=30,"
+                f"vignette=PI/5.5,"
+                f"fade=t=in:st=0:d={fade_d:.2f}:color=0x070B14,"
+                f"fade=t=out:st={fade_out_st:.2f}:d={fade_d:.2f}:color=0x070B14,"
+                f"format=yuv420p"
+            )
+            seg_path = output_path.with_name(f".staging_pod_kb_{output_path.stem}_{idx:02d}.mp4")
+            temp_files.append(seg_path)
+
+            seg_cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(img_path),
+                "-vf",
+                vf_scene,
+                "-frames:v",
+                str(frames),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "ultrafast",
+                "-r",
+                "30",
+                "-video_track_timescale",
+                "15360",
+                "-an",
+                str(seg_path),
+            ]
+            res_seg = subprocess.run(seg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res_seg.returncode == 0 and seg_path.exists():
+                clip_paths.append(seg_path)
+
+        if not clip_paths:
+            return None
+        if len(clip_paths) == 1:
+            return clip_paths[0]
+
+        broll_track = output_path.with_name(f".staging_pod_broll_{output_path.stem}.mp4")
+        concat_list = output_path.with_name(f".staging_pod_broll_list_{output_path.stem}.txt")
+        temp_files.extend([broll_track, concat_list])
+
+        concat_lines = [f"file '{str(cp.resolve()).replace(chr(92), '/')}'" for cp in clip_paths]
+        concat_list.write_text("\n".join(concat_lines) + "\n", encoding="utf-8")
+
+        concat_copy_cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list),
+            "-c",
+            "copy",
+            str(broll_track),
+        ]
+        res_concat = subprocess.run(concat_copy_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res_concat.returncode != 0 or not broll_track.exists():
+            concat_reenc_cmd = [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_list),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "ultrafast",
+                "-r",
+                "30",
+                "-an",
+                str(broll_track),
+            ]
+            res_re = subprocess.run(concat_reenc_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res_re.returncode != 0 or not broll_track.exists():
+                return clip_paths[0]
+
+        return broll_track
 
     def render_podcast_video(
         self,
@@ -999,8 +1147,9 @@ class FfmpegAdapter(IVideoProcessor):
         bgm_transition_sec: float | None = None,
         bgm_volume: float = 0.14,
         sfx_events: List[Dict[str, Any]] | None = None,
+        scene_visuals: List[Dict[str, Any]] | None = None,
     ) -> Path:
-        """Render a broadcast-grade 1280x720@30fps Podcast MP4 with live voice waveform, Chapter HUD, wrapped .ass captions, SFX, and 2-stage BGM."""
+        """Render a broadcast-grade 1280x720@30fps Podcast MP4 with Ken Burns storyboard B-roll, live voice waveform, Chapter HUD, wrapped .ass captions, SFX, and sidechain-ducked 2-stage BGM."""
         if not voice_audio_path.exists():
             raise FileNotFoundError(f"Podcast voice audio file not found: {voice_audio_path}")
 
@@ -1008,6 +1157,7 @@ class FfmpegAdapter(IVideoProcessor):
         staging_video = output_path.with_name(f".staging_pod_{output_path.name}")
         staging_master_audio = output_path.with_name(f".staging_pod_master_{output_path.stem}.wav")
         staging_ass = output_path.with_name(f".staging_pod_subs_{output_path.stem}.ass")
+        extra_temp_files: List[Path] = []
 
         voice_probe = self.probe_media(voice_audio_path)
         voice_dur = max(2.0, float(voice_probe.get("duration_seconds") or 2.0))
@@ -1015,6 +1165,7 @@ class FfmpegAdapter(IVideoProcessor):
         total_dur = round(max(voice_dur, max_sub_end), 2)
 
         safe_bgm_vol = max(0.0, min(1.0, float(bgm_volume)))
+        bgm_eff_vol = min(0.42, safe_bgm_vol * 1.85) if safe_bgm_vol > 0.0 else 0.0
         has_primary = bgm_primary_path is not None and Path(bgm_primary_path).exists()
         has_secondary = bgm_secondary_path is not None and Path(bgm_secondary_path).exists()
         has_two_stage_bgm = (
@@ -1023,117 +1174,150 @@ class FfmpegAdapter(IVideoProcessor):
             and bgm_transition_sec is not None
             and (1.0 < float(bgm_transition_sec) < total_dur - 1.0)
         )
+        has_any_bgm = (has_primary or has_secondary) and bgm_eff_vol > 0.001
 
         try:
             # =========================================================================
-            # STEP A: Master Podcast Audio (Upfront Voice + Timed SFX + 1/2-Stage BGM)
+            # STEP A: Master Podcast Audio (Sidechain-Ducked BGM + Upfront Voice + SFX)
             # =========================================================================
-            audio_cmd: List[str] = ["ffmpeg", "-y", "-i", str(voice_audio_path)]
-            audio_filters: List[str] = [
-                f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
-                f"volume=1.18,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[voice]"
-            ]
-            mix_labels: List[str] = ["[voice]"]
-            next_idx = 1
-
-            for sfx_i, ev in enumerate(sfx_events or []):
-                raw_sfx_path = ev.get("path")
-                if not raw_sfx_path:
-                    continue
-                sfx_file = Path(raw_sfx_path)
-                ts_sec = float(ev.get("timestamp_sec", 0.0) or 0.0)
-                if not sfx_file.exists() or ts_sec < 0.0 or ts_sec >= total_dur:
-                    continue
-                sfx_vol = max(0.0, min(2.0, float(ev.get("volume", 0.55) or 0.55)))
-                delay_ms = max(0, int(round(ts_sec * 1000)))
-                audio_cmd.extend(["-i", str(sfx_file)])
-                lbl = f"sfx{sfx_i}"
-                audio_filters.append(
-                    f"[{next_idx}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
-                    f"volume={sfx_vol:.3f},adelay={delay_ms}|{delay_ms},"
-                    f"apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[{lbl}]"
-                )
-                mix_labels.append(f"[{lbl}]")
-                next_idx += 1
-
-            end_fade_d = min(1.8, max(0.25, total_dur * 0.25))
-            end_fade_st = max(0.1, total_dur - end_fade_d)
-
-            if has_two_stage_bgm and bgm_primary_path is not None and bgm_secondary_path is not None:
-                tr_sec = float(bgm_transition_sec or 0.0)
-                bgm1_end = min(total_dur, tr_sec + 1.25)
-                f1_d = min(2.5, max(0.3, bgm1_end - 0.2))
-                f1_st = max(0.1, bgm1_end - f1_d)
-
-                bgm2_start = max(0.0, tr_sec - 1.5)
-                bgm2_len = max(0.5, total_dur - bgm2_start)
-                bgm2_ms = max(0, int(round(bgm2_start * 1000)))
-                f2_in_d = min(2.5, max(0.3, bgm2_len * 0.6))
-
-                audio_cmd.extend(["-stream_loop", "-1", "-i", str(bgm_primary_path)])
-                idx_b1 = next_idx
-                next_idx += 1
-
-                audio_cmd.extend(["-stream_loop", "-1", "-i", str(bgm_secondary_path)])
-                idx_b2 = next_idx
-                next_idx += 1
-
-                audio_filters.append(
-                    f"[{idx_b1}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
-                    f"atrim=0:{bgm1_end:.2f},asetpts=PTS-STARTPTS,"
-                    f"afade=t=in:st=0:d=0.80,afade=t=out:st={f1_st:.2f}:d={f1_d:.2f},"
-                    f"volume={safe_bgm_vol:.3f},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[bgm1]"
-                )
-                audio_filters.append(
-                    f"[{idx_b2}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
-                    f"atrim=0:{bgm2_len:.2f},asetpts=PTS-STARTPTS,"
-                    f"afade=t=in:st=0:d={f2_in_d:.2f},volume={safe_bgm_vol:.3f},"
-                    f"adelay={bgm2_ms}|{bgm2_ms},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
-                    f"afade=t=out:st={end_fade_st:.2f}:d={end_fade_d:.2f},asetpts=PTS-STARTPTS[bgm2]"
-                )
-                mix_labels.extend(["[bgm1]", "[bgm2]"])
-            elif has_primary or has_secondary:
-                single_bgm = bgm_primary_path if has_primary else bgm_secondary_path
-                audio_cmd.extend(["-stream_loop", "-1", "-i", str(single_bgm)])
-                idx_b = next_idx
-                next_idx += 1
-                audio_filters.append(
-                    f"[{idx_b}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
-                    f"atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS,"
-                    f"afade=t=in:st=0:d=0.80,afade=t=out:st={end_fade_st:.2f}:d={end_fade_d:.2f},"
-                    f"volume={safe_bgm_vol:.3f}[bgm1]"
-                )
-                mix_labels.append("[bgm1]")
-
-            if len(mix_labels) == 1:
-                audio_filters.append("[voice]alimiter=limit=0.96[aout]")
-            else:
-                # normalize=0 prevents FFmpeg amix from dividing voice loudness by N inputs!
-                audio_filters.append(
-                    f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:"
-                    f"dropout_transition=0:normalize=0,alimiter=limit=0.96[aout]"
-                )
-
-            audio_cmd.extend(
-                [
-                    "-filter_complex",
-                    ";".join(audio_filters),
-                    "-map",
-                    "[aout]",
-                    "-acodec",
-                    "pcm_s16le",
-                    "-ar",
-                    "24000",
-                    "-ac",
-                    "2",
-                    "-t",
-                    f"{total_dur:.2f}",
-                    str(staging_master_audio),
+            def _build_master_audio_cmd(use_sidechain: bool) -> List[str]:
+                cmd: List[str] = ["ffmpeg", "-y", "-i", str(voice_audio_path)]
+                filters: List[str] = [
+                    f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"volume=1.18,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[voice]"
                 ]
+                sfx_labels: List[str] = []
+                next_idx = 1
+
+                for sfx_i, ev in enumerate(sfx_events or []):
+                    raw_sfx_path = ev.get("path")
+                    if not raw_sfx_path:
+                        continue
+                    sfx_file = Path(raw_sfx_path)
+                    ts_sec = float(ev.get("timestamp_sec", 0.0) or 0.0)
+                    if not sfx_file.exists() or ts_sec < 0.0 or ts_sec >= total_dur:
+                        continue
+                    sfx_vol = max(0.0, min(2.0, float(ev.get("volume", 0.55) or 0.55)))
+                    delay_ms = max(0, int(round(ts_sec * 1000)))
+                    cmd.extend(["-i", str(sfx_file)])
+                    lbl = f"sfx{sfx_i}"
+                    filters.append(
+                        f"[{next_idx}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                        f"volume={sfx_vol:.3f},adelay={delay_ms}|{delay_ms},"
+                        f"apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[{lbl}]"
+                    )
+                    sfx_labels.append(f"[{lbl}]")
+                    next_idx += 1
+
+                end_fade_d = min(1.8, max(0.25, total_dur * 0.25))
+                end_fade_st = max(0.1, total_dur - end_fade_d)
+                bed_vol = bgm_eff_vol if use_sidechain else safe_bgm_vol
+
+                if has_two_stage_bgm and bgm_primary_path is not None and bgm_secondary_path is not None and bed_vol > 0.001:
+                    tr_sec = float(bgm_transition_sec or 0.0)
+                    bgm1_end = min(total_dur, tr_sec + 1.25)
+                    f1_d = min(2.5, max(0.3, bgm1_end - 0.2))
+                    f1_st = max(0.1, bgm1_end - f1_d)
+
+                    bgm2_start = max(0.0, tr_sec - 1.5)
+                    bgm2_len = max(0.5, total_dur - bgm2_start)
+                    bgm2_ms = max(0, int(round(bgm2_start * 1000)))
+                    f2_in_d = min(2.5, max(0.3, bgm2_len * 0.6))
+
+                    cmd.extend(["-stream_loop", "-1", "-i", str(bgm_primary_path)])
+                    idx_b1 = next_idx
+                    next_idx += 1
+
+                    cmd.extend(["-stream_loop", "-1", "-i", str(bgm_secondary_path)])
+                    idx_b2 = next_idx
+                    next_idx += 1
+
+                    filters.append(
+                        f"[{idx_b1}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                        f"atrim=0:{bgm1_end:.2f},asetpts=PTS-STARTPTS,"
+                        f"afade=t=in:st=0:d=0.80,afade=t=out:st={f1_st:.2f}:d={f1_d:.2f},"
+                        f"volume={bed_vol:.3f},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[bgm1]"
+                    )
+                    filters.append(
+                        f"[{idx_b2}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                        f"atrim=0:{bgm2_len:.2f},asetpts=PTS-STARTPTS,"
+                        f"afade=t=in:st=0:d={f2_in_d:.2f},volume={bed_vol:.3f},"
+                        f"adelay={bgm2_ms}|{bgm2_ms},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
+                        f"afade=t=out:st={end_fade_st:.2f}:d={end_fade_d:.2f},asetpts=PTS-STARTPTS[bgm2]"
+                    )
+                    filters.append(
+                        "[bgm1][bgm2]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,"
+                        "aformat=sample_rates=24000:channel_layouts=stereo[bgm_bed]"
+                    )
+                    bgm_ready = True
+                elif (has_primary or has_secondary) and bed_vol > 0.001:
+                    single_bgm = bgm_primary_path if has_primary else bgm_secondary_path
+                    cmd.extend(["-stream_loop", "-1", "-i", str(single_bgm)])
+                    idx_b = next_idx
+                    next_idx += 1
+                    filters.append(
+                        f"[{idx_b}:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                        f"atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS,"
+                        f"afade=t=in:st=0:d=0.80,afade=t=out:st={end_fade_st:.2f}:d={end_fade_d:.2f},"
+                        f"volume={bed_vol:.3f},apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},asetpts=PTS-STARTPTS[bgm_bed]"
+                    )
+                    bgm_ready = True
+                else:
+                    bgm_ready = False
+
+                if bgm_ready and use_sidechain and total_dur >= 1.0:
+                    filters.append("[voice]asplit=2[voice_main][voice_sc]")
+                    filters.append(
+                        "[bgm_bed][voice_sc]sidechaincompress="
+                        "threshold=0.022:ratio=5.5:attack=35:release=680:makeup=1.0[bgm_ducked]"
+                    )
+                    mix_labels = ["[voice_main]", "[bgm_ducked]"] + sfx_labels
+                else:
+                    mix_labels = ["[voice]"] + (["[bgm_bed]"] if bgm_ready else []) + sfx_labels
+
+                if len(mix_labels) == 1:
+                    filters.append(f"{mix_labels[0]}alimiter=limit=0.96[aout]")
+                else:
+                    filters.append(
+                        f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:"
+                        f"dropout_transition=0:normalize=0,alimiter=limit=0.96[aout]"
+                    )
+
+                cmd.extend(
+                    [
+                        "-filter_complex",
+                        ";".join(filters),
+                        "-map",
+                        "[aout]",
+                        "-acodec",
+                        "pcm_s16le",
+                        "-ar",
+                        "24000",
+                        "-ac",
+                        "2",
+                        "-t",
+                        f"{total_dur:.2f}",
+                        str(staging_master_audio),
+                    ]
+                )
+                return cmd
+
+            res_audio = subprocess.run(
+                _build_master_audio_cmd(use_sidechain=has_any_bgm and total_dur >= 1.0),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
             )
-            res_audio = subprocess.run(audio_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if (res_audio.returncode != 0 or not staging_master_audio.exists()) and has_any_bgm:
+                # Fallback 1: standard non-sidechain amix if sidechaincompress failed on edge-case stream
+                res_audio = subprocess.run(
+                    _build_master_audio_cmd(use_sidechain=False),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
             if res_audio.returncode != 0 or not staging_master_audio.exists():
-                # Resilient fallback preserving clean upfront voice track
+                # Fallback 2: clean upfront voice master
                 fallback_audio_cmd = [
                     "ffmpeg",
                     "-y",
@@ -1153,7 +1337,7 @@ class FfmpegAdapter(IVideoProcessor):
                 subprocess.run(fallback_audio_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             # =========================================================================
-            # STEP B: Broadcast 1280x720@30fps Visuals + Waveform + HUD + Wrapped .ass
+            # STEP B: Storyboard Ken Burns B-Roll (or Studio Canvas) + Waveform + .ass
             # =========================================================================
             self._write_ass(subtitles, staging_ass, width=1280, height=720)
 
@@ -1180,154 +1364,265 @@ class FfmpegAdapter(IVideoProcessor):
             tr_val = float(bgm_transition_sec or 0.0)
             tr_enable = f":enable='gte(t\\,{tr_val:.2f})'"
 
-            hud_ops: List[str] = [
-                # Atmospheric studio backdrop + Stage 1 cool midnight-blue accents
-                "drawbox=x=0:y=0:w=1280:h=4:color=0x38BDF8@0.90:t=fill",
-                "drawbox=x=42:y=16:w=1196:h=684:color=0x111827@0.38:t=fill",
-                "drawbox=x=84:y=179:w=1112:h=342:color=0x38BDF8@0.07:t=fill",
-            ]
-
-            if has_turnaround_hud:
-                # Stage 2 warm hopeful amber/emerald glow at emotional turnaround
-                hud_ops.extend(
-                    [
-                        f"drawbox=x=0:y=0:w=1280:h=5:color=0xF59E0B@0.96:t=fill{tr_enable}",
-                        f"drawbox=x=84:y=179:w=1112:h=342:color=0xF59E0B@0.14:t=fill{tr_enable}",
-                    ]
-                )
-
-            # 3. Top Episode Header Bar (x=56, y=28, w=1168, h=54)
-            hud_ops.extend(
-                [
-                    "drawbox=x=56:y=28:w=1168:h=54:color=0x111827@0.95:t=fill",
-                    "drawbox=x=56:y=28:w=1168:h=54:color=0x1E293B@0.95:t=1",
-                    "drawbox=x=56:y=28:w=5:h=54:color=0x38BDF8@1.0:t=fill",
-                    "drawbox=x=74:y=38:w=164:h=34:color=0x1E293B@0.96:t=fill",
-                    f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0x38BDF8:fontsize=14:x=90:y=48",
-                    f"drawtext={font_bold}text='{safe_title}':fontcolor=0xF9FAFB:fontsize=20:x=254:y=44",
-                    "drawbox=x=924:y=36:w=286:h=38:color=0x0F172A@0.95:t=fill",
-                    "drawbox=x=1206:y=36:w=4:h=38:color=0x38BDF8@1.0:t=fill",
-                    f"drawtext={font_bold}text='{safe_speaker}':fontcolor=0x93C5FD:fontsize=15:x=1194-text_w:y=47",
-                ]
-            )
-            if has_turnaround_hud:
-                hud_ops.extend(
-                    [
-                        f"drawbox=x=56:y=28:w=5:h=54:color=0xF59E0B@1.0:t=fill{tr_enable}",
-                        f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0xFCD34D:fontsize=14:x=90:y=48{tr_enable}",
-                        f"drawbox=x=1206:y=36:w=4:h=38:color=0x10B981@1.0:t=fill{tr_enable}",
-                    ]
-                )
-
-            # 4. Dynamic Chapter HUD Card (x=56, y=96, w=1168, h=52)
-            hud_ops.extend(
-                [
-                    "drawbox=x=56:y=96:w=1168:h=52:color=0x0E1628@0.92:t=fill",
-                    "drawbox=x=56:y=96:w=1168:h=52:color=0x1E293B@0.90:t=1",
-                    "drawbox=x=56:y=96:w=4:h=52:color=0x38BDF8@0.95:t=fill",
-                ]
-            )
-            if has_turnaround_hud:
-                hud_ops.append(f"drawbox=x=56:y=96:w=4:h=52:color=0x10B981@0.95:t=fill{tr_enable}")
-
             effective_chapters = list(chapters) if chapters else [
                 {"title": clean_title, "start_time": 0.0, "end_time": total_dur, "mood": "STUDIO LIVE"}
             ]
-            for idx, ch in enumerate(effective_chapters, start=1):
-                ch_raw = " ".join(str(ch.get("title") or f"Phần {idx}").strip().split())
-                if len(ch_raw) > 62:
-                    ch_raw = f"{ch_raw[:60].rstrip()}…"
-                c_start = max(0.0, float(ch.get("start_time", 0.0) or 0.0))
-                c_end = max(c_start + 0.1, float(ch.get("end_time", total_dur) or total_dur))
-                if idx == len(effective_chapters):
-                    c_end = max(c_end, total_dur + 0.25)
-                ch_label = self._escape_drawtext(f"CHƯƠNG {idx:02d}  •  {ch_raw}")
-                hud_ops.append(
-                    f"drawtext={font_bold}text='{ch_label}':fontcolor=0xE2E8F0:fontsize=18:"
-                    f"x=78:y=112:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+
+            broll_track: Path | None = None
+            if scene_visuals:
+                broll_track = self._render_storyboard_broll_track(
+                    scene_visuals=scene_visuals,
+                    total_dur=total_dur,
+                    output_path=output_path,
+                    temp_files=extra_temp_files,
                 )
-                mood_raw = " ".join(str(ch.get("mood") or "").strip().split()).upper()
-                if mood_raw:
-                    safe_mood = self._escape_drawtext(mood_raw[:24])
-                    hud_ops.append(
-                        f"drawtext={font_reg}text='{safe_mood}':fontcolor=0x38BDF8:fontsize=14:"
-                        f"x=1204-text_w:y=115:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
-                    )
-
-            # 5. Center Reactive Audio Waveform Visualizer Frame (x=90, y=185, w=1100, h=330)
-            hud_ops.extend(
-                [
-                    "drawbox=x=90:y=185:w=1100:h=330:color=0x0E1422@0.94:t=fill",
-                    "drawbox=x=90:y=185:w=1100:h=330:color=0x1E293B@0.95:t=2",
-                    "drawbox=x=90:y=185:w=1100:h=3:color=0x38BDF8@0.92:t=fill",
-                    "drawbox=x=130:y=350:w=1020:h=1:color=0x334155@0.55:t=fill",
-                    f"drawtext={font_reg}text='LIVE VOICE WAVEFORM  •  24kHz BROADCAST MASTER':fontcolor=0x64748B:fontsize=13:x=118:y=204",
-                ]
-            )
-            if has_turnaround_hud:
-                hud_ops.append(f"drawbox=x=90:y=185:w=1100:h=3:color=0xF59E0B@0.96:t=fill{tr_enable}")
-
-            # 6. Lower-Third Subtitle Scrim (x=64, y=542, w=1152, h=144) + Bottom Progress Track
-            hud_ops.extend(
-                [
-                    "drawbox=x=64:y=542:w=1152:h=144:color=0x0B0F19@0.90:t=fill",
-                    "drawbox=x=64:y=542:w=1152:h=144:color=0x1E293B@0.92:t=1",
-                    "drawbox=x=64:y=542:w=1152:h=3:color=0x38BDF8@0.88:t=fill",
-                    "drawbox=x=0:y=712:w=1280:h=8:color=0x1E293B@0.92:t=fill",
-                ]
-            )
-            if has_turnaround_hud:
-                hud_ops.append(f"drawbox=x=64:y=542:w=1152:h=3:color=0x10B981@0.95:t=fill{tr_enable}")
 
             esc_ass = self._escape_filter_path(staging_ass)
             sub_stage = f"[vp]ass='{esc_ass}'[vout]" if subtitles else "[vp]null[vout]"
 
-            video_fc = (
-                f"color=c=0x090D16:s=1280x720:r=30:d={total_dur:.2f}[bg0];"
-                f"color=c=0x38BDF8:s=1280x8:r=30:d={total_dur:.2f}[pbar];"
-                f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
-                f"volume=2.2,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
-                f"showwaves=s=1020x210:mode=cline:draw=full:rate=30:scale=sqrt:"
-                f"colors=0x38BDF8@0.92|0x60A5FA@0.75,format=rgb24,colorkey=0x000000:0.03:0.05[wave];"
-                f"[bg0]{','.join(hud_ops)}[hud];"
-                f"[hud][wave]overlay=x=130:y=245:shortest=1[vwave];"
-                f"[vwave][pbar]overlay=x='-1280+1280*(t/{total_dur:.2f})':y=712:shortest=1[vp];"
-                f"{sub_stage}"
-            )
+            if broll_track is not None and broll_track.exists():
+                # -----------------------------------------------------------------
+                # CINEMATIC STORYBOARD B-ROLL LAYOUT (75% Unobstructed Center Art)
+                # -----------------------------------------------------------------
+                broll_hud_ops: List[str] = [
+                    # Subtle top (y=0..118) & bottom (y=530..720) dark cinema scrims
+                    "drawbox=x=0:y=0:w=1280:h=118:color=0x070B14@0.68:t=fill",
+                    "drawbox=x=0:y=530:w=1280:h=190:color=0x070B14@0.78:t=fill",
+                    "drawbox=x=0:y=0:w=1280:h=3:color=0x38BDF8@0.90:t=fill",
+                    # Translucent Top Episode Bar (y=18..58)
+                    "drawbox=x=44:y=18:w=1192:h=40:color=0x0B1120@0.62:t=fill",
+                    "drawbox=x=44:y=18:w=4:h=40:color=0x38BDF8@0.96:t=fill",
+                    f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0x38BDF8:fontsize=13:x=62:y=31",
+                    f"drawtext={font_bold}text='{safe_title}':fontcolor=0xF9FAFB:fontsize=18:x=204:y=28",
+                    f"drawtext={font_bold}text='{safe_speaker}':fontcolor=0x93C5FD:fontsize=14:x=1218-text_w:y=31",
+                    # Active Chapter HUD Strip (y=64..98)
+                    "drawbox=x=44:y=64:w=1192:h=34:color=0x070B14@0.54:t=fill",
+                    "drawbox=x=44:y=64:w=3:h=34:color=0x38BDF8@0.88:t=fill",
+                    # Subtle center baseline for compact waveform + bottom progress track (y=714, h=6)
+                    "drawbox=x=440:y=519:w=400:h=1:color=0x94A3B8@0.28:t=fill",
+                    "drawbox=x=0:y=714:w=1280:h=6:color=0x1E293B@0.88:t=fill",
+                ]
+                if has_turnaround_hud:
+                    broll_hud_ops.extend(
+                        [
+                            f"drawbox=x=0:y=0:w=1280:h=3:color=0xF59E0B@0.96:t=fill{tr_enable}",
+                            f"drawbox=x=44:y=18:w=4:h=40:color=0xF59E0B@0.98:t=fill{tr_enable}",
+                            f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0xFCD34D:fontsize=13:x=62:y=31{tr_enable}",
+                            f"drawbox=x=44:y=64:w=3:h=34:color=0x10B981@0.95:t=fill{tr_enable}",
+                        ]
+                    )
 
-            video_cmd = [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(voice_audio_path),
-                "-i",
-                str(staging_master_audio),
-                "-filter_complex",
-                video_fc,
-                "-map",
-                "[vout]",
-                "-map",
-                "1:a:0",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                "-preset",
-                "ultrafast",
-                "-r",
-                "30",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-ar",
-                "44100",
-                "-t",
-                f"{total_dur:.2f}",
-                "-movflags",
-                "+faststart",
-                str(staging_video),
-            ]
+                for idx, ch in enumerate(effective_chapters, start=1):
+                    ch_raw = " ".join(str(ch.get("title") or f"Phần {idx}").strip().split())
+                    if len(ch_raw) > 64:
+                        ch_raw = f"{ch_raw[:62].rstrip()}…"
+                    c_start = max(0.0, float(ch.get("start_time", 0.0) or 0.0))
+                    c_end = max(c_start + 0.1, float(ch.get("end_time", total_dur) or total_dur))
+                    if idx == len(effective_chapters):
+                        c_end = max(c_end, total_dur + 0.25)
+                    ch_label = self._escape_drawtext(f"CHƯƠNG {idx:02d}  •  {ch_raw}")
+                    broll_hud_ops.append(
+                        f"drawtext={font_bold}text='{ch_label}':fontcolor=0xE2E8F0:fontsize=15:"
+                        f"x=62:y=73:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+                    )
+                    mood_raw = " ".join(str(ch.get("mood") or "").strip().split()).upper()
+                    if mood_raw:
+                        safe_mood = self._escape_drawtext(mood_raw[:24])
+                        mood_col = "0xFCD34D" if "HOPE" in mood_raw else "0x38BDF8"
+                        broll_hud_ops.append(
+                            f"drawtext={font_reg}text='{safe_mood}':fontcolor={mood_col}:fontsize=13:"
+                            f"x=1218-text_w:y=74:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+                        )
+
+                video_fc = (
+                    f"[2:v]scale=1280:720,fps=30,tpad=stop_mode=clone:stop_duration=1.0,"
+                    f"trim=duration={total_dur:.2f},setpts=PTS-STARTPTS[bg0];"
+                    f"color=c=0x38BDF8:s=1280x6:r=30:d={total_dur:.2f}[pbar];"
+                    f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"volume=1.45,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
+                    f"showwaves=s=420x38:mode=cline:draw=full:rate=30:scale=lin:"
+                    f"colors=0x38BDF8@0.85|0xF59E0B@0.75,format=rgba,"
+                    f"colorkey=0x000000:0.04:0.08,colorchannelmixer=aa=0.84[wave];"
+                    f"[bg0]{','.join(broll_hud_ops)}[hud];"
+                    f"[hud][wave]overlay=x=430:y=500:shortest=1[vwave];"
+                    f"[vwave][pbar]overlay=x='-1280+1280*(t/{total_dur:.2f})':y=714:shortest=1[vp];"
+                    f"{sub_stage}"
+                )
+                video_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(voice_audio_path),
+                    "-i",
+                    str(staging_master_audio),
+                    "-i",
+                    str(broll_track),
+                    "-filter_complex",
+                    video_fc,
+                    "-map",
+                    "[vout]",
+                    "-map",
+                    "1:a:0",
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-preset",
+                    "ultrafast",
+                    "-r",
+                    "30",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-ar",
+                    "44100",
+                    "-t",
+                    f"{total_dur:.2f}",
+                    "-movflags",
+                    "+faststart",
+                    str(staging_video),
+                ]
+            else:
+                # -----------------------------------------------------------------
+                # CLASSIC v5.0 STUDIO WAVEFORM CANVAS (when scene_visuals is None)
+                # -----------------------------------------------------------------
+                hud_ops: List[str] = [
+                    "drawbox=x=0:y=0:w=1280:h=4:color=0x38BDF8@0.90:t=fill",
+                    "drawbox=x=42:y=16:w=1196:h=684:color=0x111827@0.38:t=fill",
+                    "drawbox=x=84:y=179:w=1112:h=342:color=0x38BDF8@0.07:t=fill",
+                ]
+
+                if has_turnaround_hud:
+                    hud_ops.extend(
+                        [
+                            f"drawbox=x=0:y=0:w=1280:h=5:color=0xF59E0B@0.96:t=fill{tr_enable}",
+                            f"drawbox=x=84:y=179:w=1112:h=342:color=0xF59E0B@0.14:t=fill{tr_enable}",
+                        ]
+                    )
+
+                hud_ops.extend(
+                    [
+                        "drawbox=x=56:y=28:w=1168:h=54:color=0x111827@0.95:t=fill",
+                        "drawbox=x=56:y=28:w=1168:h=54:color=0x1E293B@0.95:t=1",
+                        "drawbox=x=56:y=28:w=5:h=54:color=0x38BDF8@1.0:t=fill",
+                        "drawbox=x=74:y=38:w=164:h=34:color=0x1E293B@0.96:t=fill",
+                        f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0x38BDF8:fontsize=14:x=90:y=48",
+                        f"drawtext={font_bold}text='{safe_title}':fontcolor=0xF9FAFB:fontsize=20:x=254:y=44",
+                        "drawbox=x=924:y=36:w=286:h=38:color=0x0F172A@0.95:t=fill",
+                        "drawbox=x=1206:y=36:w=4:h=38:color=0x38BDF8@1.0:t=fill",
+                        f"drawtext={font_bold}text='{safe_speaker}':fontcolor=0x93C5FD:fontsize=15:x=1194-text_w:y=47",
+                    ]
+                )
+                if has_turnaround_hud:
+                    hud_ops.extend(
+                        [
+                            f"drawbox=x=56:y=28:w=5:h=54:color=0xF59E0B@1.0:t=fill{tr_enable}",
+                            f"drawtext={font_bold}text='PODCAST STUDIO':fontcolor=0xFCD34D:fontsize=14:x=90:y=48{tr_enable}",
+                            f"drawbox=x=1206:y=36:w=4:h=38:color=0x10B981@1.0:t=fill{tr_enable}",
+                        ]
+                    )
+
+                hud_ops.extend(
+                    [
+                        "drawbox=x=56:y=96:w=1168:h=52:color=0x0E1628@0.92:t=fill",
+                        "drawbox=x=56:y=96:w=1168:h=52:color=0x1E293B@0.90:t=1",
+                        "drawbox=x=56:y=96:w=4:h=52:color=0x38BDF8@0.95:t=fill",
+                    ]
+                )
+                if has_turnaround_hud:
+                    hud_ops.append(f"drawbox=x=56:y=96:w=4:h=52:color=0x10B981@0.95:t=fill{tr_enable}")
+
+                for idx, ch in enumerate(effective_chapters, start=1):
+                    ch_raw = " ".join(str(ch.get("title") or f"Phần {idx}").strip().split())
+                    if len(ch_raw) > 62:
+                        ch_raw = f"{ch_raw[:60].rstrip()}…"
+                    c_start = max(0.0, float(ch.get("start_time", 0.0) or 0.0))
+                    c_end = max(c_start + 0.1, float(ch.get("end_time", total_dur) or total_dur))
+                    if idx == len(effective_chapters):
+                        c_end = max(c_end, total_dur + 0.25)
+                    ch_label = self._escape_drawtext(f"CHƯƠNG {idx:02d}  •  {ch_raw}")
+                    hud_ops.append(
+                        f"drawtext={font_bold}text='{ch_label}':fontcolor=0xE2E8F0:fontsize=18:"
+                        f"x=78:y=112:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+                    )
+                    mood_raw = " ".join(str(ch.get("mood") or "").strip().split()).upper()
+                    if mood_raw:
+                        safe_mood = self._escape_drawtext(mood_raw[:24])
+                        hud_ops.append(
+                            f"drawtext={font_reg}text='{safe_mood}':fontcolor=0x38BDF8:fontsize=14:"
+                            f"x=1204-text_w:y=115:enable='between(t\\,{c_start:.2f}\\,{c_end:.2f})'"
+                        )
+
+                hud_ops.extend(
+                    [
+                        "drawbox=x=90:y=185:w=1100:h=330:color=0x0E1422@0.94:t=fill",
+                        "drawbox=x=90:y=185:w=1100:h=330:color=0x1E293B@0.95:t=2",
+                        "drawbox=x=90:y=185:w=1100:h=3:color=0x38BDF8@0.92:t=fill",
+                        "drawbox=x=130:y=350:w=1020:h=1:color=0x334155@0.55:t=fill",
+                        f"drawtext={font_reg}text='LIVE VOICE WAVEFORM  •  24kHz BROADCAST MASTER':fontcolor=0x64748B:fontsize=13:x=118:y=204",
+                    ]
+                )
+                if has_turnaround_hud:
+                    hud_ops.append(f"drawbox=x=90:y=185:w=1100:h=3:color=0xF59E0B@0.96:t=fill{tr_enable}")
+
+                hud_ops.extend(
+                    [
+                        "drawbox=x=64:y=542:w=1152:h=144:color=0x0B0F19@0.90:t=fill",
+                        "drawbox=x=64:y=542:w=1152:h=144:color=0x1E293B@0.92:t=1",
+                        "drawbox=x=64:y=542:w=1152:h=3:color=0x38BDF8@0.88:t=fill",
+                        "drawbox=x=0:y=712:w=1280:h=8:color=0x1E293B@0.92:t=fill",
+                    ]
+                )
+                if has_turnaround_hud:
+                    hud_ops.append(f"drawbox=x=64:y=542:w=1152:h=3:color=0x10B981@0.95:t=fill{tr_enable}")
+
+                video_fc = (
+                    f"color=c=0x090D16:s=1280x720:r=30:d={total_dur:.2f}[bg0];"
+                    f"color=c=0x38BDF8:s=1280x8:r=30:d={total_dur:.2f}[pbar];"
+                    f"[0:a]aresample=24000,aformat=sample_rates=24000:channel_layouts=stereo,"
+                    f"volume=2.2,apad=whole_dur={total_dur:.2f},atrim=0:{total_dur:.2f},"
+                    f"showwaves=s=1020x210:mode=cline:draw=full:rate=30:scale=sqrt:"
+                    f"colors=0x38BDF8@0.92|0x60A5FA@0.75,format=rgb24,colorkey=0x000000:0.03:0.05[wave];"
+                    f"[bg0]{','.join(hud_ops)}[hud];"
+                    f"[hud][wave]overlay=x=130:y=245:shortest=1[vwave];"
+                    f"[vwave][pbar]overlay=x='-1280+1280*(t/{total_dur:.2f})':y=712:shortest=1[vp];"
+                    f"{sub_stage}"
+                )
+                video_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(voice_audio_path),
+                    "-i",
+                    str(staging_master_audio),
+                    "-filter_complex",
+                    video_fc,
+                    "-map",
+                    "[vout]",
+                    "-map",
+                    "1:a:0",
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-preset",
+                    "ultrafast",
+                    "-r",
+                    "30",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-ar",
+                    "44100",
+                    "-t",
+                    f"{total_dur:.2f}",
+                    "-movflags",
+                    "+faststart",
+                    str(staging_video),
+                ]
+
             res_vid = subprocess.run(video_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if res_vid.returncode != 0:
                 raise RuntimeError(
@@ -1340,7 +1635,7 @@ class FfmpegAdapter(IVideoProcessor):
             self._write_vtt(subtitles, final_file.with_suffix(".vtt"))
             return final_file
         finally:
-            for temp_f in (staging_master_audio, staging_ass):
+            for temp_f in (staging_master_audio, staging_ass, *extra_temp_files):
                 if temp_f.exists():
                     try:
                         temp_f.unlink()
